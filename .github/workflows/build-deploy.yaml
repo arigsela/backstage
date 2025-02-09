@@ -1,0 +1,49 @@
+name: Build and Push Backstage
+
+on:
+  push:
+    branches: [ create-gha ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Checkout the repository from the root
+      - uses: actions/checkout@v3
+
+      # Configure AWS credentials for ECR
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+
+      # Login to Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      # Install dependencies and build the Backstage app inside the asela-portal folder
+      - name: Install and Build Backstage
+        working-directory: asela-portal
+        run: |
+          yarn install --immutable
+          yarn tsc
+          yarn build:backend
+
+      # Build, tag, and push the Docker image
+      - name: Build, tag, and push Backstage image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: backstage  # Change this if your ECR repository name is different
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Build the Docker image using the Dockerfile located at asela-portal/packages/backend/Dockerfile
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f asela-portal/packages/backend/Dockerfile asela-portal
+          # Tag the image as latest
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          # Push both tags to ECR
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
