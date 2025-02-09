@@ -2,7 +2,7 @@ name: Build and Push Backstage
 
 on:
   push:
-    branches: [ main ]
+    branches: [ create-gha ]
 
 jobs:
   build-and-push:
