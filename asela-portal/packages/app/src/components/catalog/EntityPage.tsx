@@ -1,4 +1,6 @@
 import React from 'react';
+import { CrossplaneAllResourcesTable, CrossplaneResourceGraph, isCrossplaneAvailable, CrossplaneOverviewCard } from '@terasky/backstage-plugin-crossplane-resources-frontend';
+
 import { Button, Grid } from '@material-ui/core';
 import {
   EntityApiDefinitionCard,
@@ -58,6 +60,38 @@ import {
   EntityKubernetesContent,
   isKubernetesAvailable,
 } from '@backstage/plugin-kubernetes';
+
+const crossplaneOverviewContent = (
+  <Grid container spacing={3} alignItems="stretch">
+    <Grid item md={6}>
+      <EntityAboutCard variant="gridItem" />
+    </Grid>
+    <Grid item md={6}>
+      < CrossplaneOverviewCard />
+    </Grid>
+  </Grid>
+);
+
+const crossplaneEntityPage = (
+  <EntityLayout>
+    <EntityLayout.Route path="/" title="Overview">
+      {crossplaneOverviewContent}
+    </EntityLayout.Route>
+    <EntityLayout.Route
+      path="/kubernetes"
+      title="Kubernetes"
+      if={isKubernetesAvailable}
+    >
+      <EntityKubernetesContent />
+    </EntityLayout.Route>
+    <EntityLayout.Route if={isCrossplaneAvailable} path="/crossplane-resources" title="Crossplane Resources">
+      <CrossplaneAllResourcesTable />
+    </EntityLayout.Route>
+    <EntityLayout.Route if={isCrossplaneAvailable} path="/crossplane-graph" title="Crossplane Graph">
+      <CrossplaneResourceGraph />
+    </EntityLayout.Route>
+  </EntityLayout>
+);
 
 const techdocsContent = (
   <EntityTechdocsContent>
@@ -254,6 +288,38 @@ const componentPage = (
     <EntitySwitch.Case if={isComponentType('website')}>
       {websiteEntityPage}
     </EntitySwitch.Case>
+
+    const crossplaneOverviewContent = (
+    <Grid container spacing={3} alignItems="stretch">
+      <Grid item md={6}>
+        <EntityAboutCard variant="gridItem" />
+      </Grid>
+      <Grid item md={6}>
+        < CrossplaneOverviewCard />
+      </Grid>
+    </Grid>
+    );
+
+    const crossplaneEntityPage = (
+    <EntityLayout>
+      <EntityLayout.Route path="/" title="Overview">
+        {crossplaneOverviewContent}
+      </EntityLayout.Route>
+      <EntityLayout.Route
+        path="/kubernetes"
+        title="Kubernetes"
+        if={isKubernetesAvailable}
+      >
+        <EntityKubernetesContent />
+      </EntityLayout.Route>
+      <EntityLayout.Route if={isCrossplaneAvailable} path="/crossplane-resources" title="Crossplane Resources">
+        <CrossplaneAllResourcesTable />
+      </EntityLayout.Route>
+      <EntityLayout.Route if={isCrossplaneAvailable} path="/crossplane-graph" title="Crossplane Graph">
+        <CrossplaneResourceGraph />
+      </EntityLayout.Route>
+    </EntityLayout>
+    );
 
     <EntitySwitch.Case>{defaultEntityPage}</EntitySwitch.Case>
   </EntitySwitch>

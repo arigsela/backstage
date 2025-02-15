@@ -10,11 +10,17 @@ import { createBackend } from '@backstage/backend-defaults';
 
 const backend = createBackend();
 
+backend.add(import('@terasky/backstage-plugin-kubernetes-ingestor'));
 backend.add(import('@backstage/plugin-app-backend'));
 backend.add(import('@backstage/plugin-proxy-backend'));
 backend.add(import('@backstage/plugin-scaffolder-backend'));
 backend.add(import('@backstage/plugin-scaffolder-backend-module-github'));
 backend.add(import('@backstage/plugin-techdocs-backend'));
+backend.add(import('@backstage/plugin-catalog-backend-module-github'));
+backend.add(import('@terasky/backstage-plugin-scaffolder-backend-module-terasky-utils'));
+backend.add(import('@terasky/backstage-plugin-crossplane-permissions-backend'));
+
+
 
 // auth plugin
 backend.add(import('@backstage/plugin-auth-backend'));
