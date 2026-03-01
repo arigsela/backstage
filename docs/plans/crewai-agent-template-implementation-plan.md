@@ -2,8 +2,8 @@
 
 **Created:** 2026-03-01
 **Last Updated:** 2026-03-01
-**Current Status:** Phase 0 — Planning Complete
-**Overall Progress:** 0/28 tasks (0%)
+**Current Status:** Phase 1 Complete — Template Skeleton & Registration
+**Overall Progress:** 4/28 tasks (14%)
 
 ---
 
@@ -89,7 +89,7 @@ From `base-apps/oncall-crewai/`:
 ### Phase 1: Template Skeleton & Registration (4 tasks)
 
 #### Task 1.1: Create Template Directory Structure
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files:**
 - `examples/templates/crewai-agent/template.yaml` (new)
 - `examples/templates/crewai-agent/content/` (new directory)
@@ -109,7 +109,7 @@ spec:
 ```
 
 #### Task 1.2: Define Template Parameters (Wizard Steps)
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files:** `examples/templates/crewai-agent/template.yaml`
 
 Define 4 wizard steps in `spec.parameters`:
@@ -137,7 +137,7 @@ Define 4 wizard steps in `spec.parameters`:
 - `vaultRole` (string, default from project name): Vault role name
 
 #### Task 1.3: Register Template in Backstage Catalog
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files:** `app-config.yaml`
 
 Add a new catalog location entry:
@@ -151,9 +151,11 @@ catalog:
 ```
 
 #### Task 1.4: Verify Template Appears in UI
-**Status:** ⬜ Pending
+**Status:** ✅ Complete (merged with Task 1.1 — template has steps + outputs + publish:file for testing)
 
 Start Backstage locally (`yarn start`), navigate to `/create`, and verify the "CrewAI Multi-Agent Project" template appears with all parameter steps rendering correctly.
+
+**Phase 1 Summary:** Template skeleton created at `examples/templates/crewai-agent/template.yaml` with 4-step wizard (Project Details, Orchestrator Config, Sub-Agent Config, Infrastructure). Registered in both `app-config.yaml` and `app-config.production.yaml`. Uses `publish:file` for local testing with commented `publish:github` block ready for production. Placeholder `content/` directory has `catalog-info.yaml` and `README.md` with Nunjucks templating.
 
 ---
 
@@ -521,10 +523,10 @@ Required keys:
 
 | Phase | Status | Tasks | Completion |
 |-------|--------|-------|------------|
-| Phase 1: Template Skeleton | ⬜ Not Started | 0/4 | 0% |
+| Phase 1: Template Skeleton | ✅ Complete | 4/4 | 100% |
 | Phase 2: Agent Code Templates | ⬜ Not Started | 0/7 | 0% |
 | Phase 3: K8s Manifest Templates | ⬜ Not Started | 0/5 | 0% |
 | Phase 4: Template Actions | ⬜ Not Started | 0/4 | 0% |
 | Phase 5: Chores Tracker Agent | ⬜ Not Started | 0/5 | 0% |
 | Phase 6: Documentation | ⬜ Not Started | 0/3 | 0% |
-| **Total** | | **0/28** | **0%** |
+| **Total** | | **4/28** | **14%** |

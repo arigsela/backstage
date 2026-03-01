@@ -95,6 +95,12 @@ catalog:
       rules:
         - allow: [Template]
 
+    # CrewAI multi-agent project template
+    - type: file
+      target: ./examples/templates/crewai-agent/template.yaml
+      rules:
+        - allow: [Template]
+
     - type: file
       target: ./examples/org.yaml
       rules:
