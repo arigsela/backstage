@@ -1,0 +1,85 @@
+# Chores Tracker Data Model
+
+## Database
+- Engine: PostgreSQL (CloudNativePG)
+- Host: postgresql-cluster-rw.postgresql.svc.cluster.local:5432
+- Database: chores_tracker
+- User: chores_user
+- ORM: SQLAlchemy with async driver (asyncpg)
+- Migration: Alembic
+
+## Core Entities
+
+### Users
+Primary entity for both parents and children.
+- id (integer, primary key, auto-increment)
+- username (string, unique, not null)
+- email (string, unique, nullable - only parents)
+- password_hash (string, not null)
+- role (enum: "parent" | "child", not null)
+- family_id (integer, foreign key -> families.id)
+- created_at (timestamp)
+- updated_at (timestamp)
+
+### Families
+Groups users into family units.
+- id (integer, primary key, auto-increment)
+- name (string, not null)
+- created_by (integer, foreign key -> users.id)
+- created_at (timestamp)
+
+### Chores
+Task definitions that can be assigned to family members.
+- id (integer, primary key, auto-increment)
+- name (string, not null)
+- description (string, nullable)
+- reward_amount (float, not null)
+- reward_type (enum: "fixed" | "range", default "fixed")
+- reward_min (float, nullable - used when type is "range")
+- reward_max (float, nullable - used when type is "range")
+- recurring (boolean, default false)
+- cooldown_hours (integer, nullable - hours before recurring chore reappears)
+- family_id (integer, foreign key -> families.id)
+- created_by (integer, foreign key -> users.id)
+- assignee_id (integer, foreign key -> users.id, nullable)
+- status (enum: "pending" | "completed" | "archived")
+- created_at (timestamp)
+- completed_at (timestamp, nullable)
+
+### Rewards
+Tracks reward earnings and balance.
+- id (integer, primary key, auto-increment)
+- user_id (integer, foreign key -> users.id)
+- chore_id (integer, foreign key -> chores.id)
+- amount (float, not null)
+- transaction_type (enum: "earned" | "spent" | "adjustment")
+- description (string, nullable)
+- created_at (timestamp)
+
+## Relationships
+- Family has many Users (one-to-many)
+- Family has many Chores (one-to-many)
+- User (parent) creates Chores (one-to-many via created_by)
+- User (child) is assigned Chores (one-to-many via assignee_id)
+- User has many Rewards (one-to-many)
+- Chore has many Reward transactions (one-to-many)
+
+## Entity Relationship Diagram (text)
+
+  Families
+     |
+     |-- has many --> Users (parent or child role)
+     |                  |
+     |                  |-- earns --> Rewards
+     |                  |
+     |-- has many --> Chores
+                        |
+                        |-- assigned to --> User
+                        |-- generates --> Rewards (on completion)
+
+## Key Constraints
+- A family must have at least one parent user
+- Only parents can create chores and add children
+- Children can only see/complete chores assigned to them or their family
+- Recurring chores automatically reset after cooldown_hours
+- Reward amounts are tracked per-transaction for audit trail

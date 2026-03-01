@@ -1,0 +1,91 @@
+# Chores Tracker Deployment Guide
+
+## Deployment Overview
+Chores Tracker uses GitOps deployment via ArgoCD. All changes to the
+Kubernetes manifests in the arigsela/kubernetes repo are automatically
+synced to the cluster.
+
+## Repository Structure
+Manifests are stored in the arigsela/kubernetes repo:
+- base-apps/chores-tracker-backend/   - Backend K8s manifests
+- base-apps/chores-tracker-frontend/  - Frontend K8s manifests
+- base-apps/chores-tracker-backend.yaml  - ArgoCD app (backend)
+- base-apps/chores-tracker-frontend.yaml - ArgoCD app (frontend)
+
+## ArgoCD Configuration
+Both services are managed by ArgoCD with:
+- Automated sync: changes in Git automatically deploy
+- Auto-prune: removed manifests are deleted from cluster
+- Self-heal: manual changes are reverted to Git state
+- CreateNamespace: namespaces created automatically
+
+## Deployment Process
+
+### Deploying a New Backend Version
+1. Build the Docker image:
+   docker build -t chores-tracker:<version> .
+2. Tag and push to ECR:
+   docker tag chores-tracker:<version> 852893458518.dkr.ecr.us-east-2.amazonaws.com/chores-tracker:<version>
+   aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 852893458518.dkr.ecr.us-east-2.amazonaws.com
+   docker push 852893458518.dkr.ecr.us-east-2.amazonaws.com/chores-tracker:<version>
+3. Update the image tag in base-apps/chores-tracker-backend/deployments.yaml
+4. Commit and push to arigsela/kubernetes repo
+5. ArgoCD auto-syncs (or manually sync from ArgoCD UI)
+
+### Canary Deployment (Backend)
+The backend uses Argo Rollouts with canary strategy:
+- Step 1: 20% of traffic for 5 minutes
+- Step 2: 50% of traffic for 5 minutes
+- Step 3: 80% of traffic for 5 minutes
+- Step 4: Full rollout to 100%
+
+Three services support canary routing:
+- chores-tracker-backend (primary)
+- chores-tracker-backend-stable (stable version)
+- chores-tracker-backend-canary (new version)
+
+If issues are detected, rollback is automatic.
+
+### Deploying a New Frontend Version
+1. Build the Docker image:
+   docker build -t chores-tracker-frontend:<version> .
+2. Push to ECR (same process as backend)
+3. Update image tag in base-apps/chores-tracker-frontend/deployment.yaml
+4. Commit and push
+
+## Secret Management
+Secrets are stored in HashiCorp Vault and synced to K8s:
+
+Vault path: k8s-secrets/chores-tracker-backend
+Required secrets:
+- DATABASE_URL: PostgreSQL async connection string
+  Format: postgresql+asyncpg://chores_user:<password>@postgresql-cluster-rw.postgresql.svc.cluster.local:5432/chores_tracker
+- DB_PASSWORD: Database password for chores_user
+- SECRET_KEY: JWT signing key for authentication tokens
+
+Refresh interval: 1 hour (ESO checks Vault for updates)
+
+## Environment Variables (ConfigMap)
+Non-sensitive configuration:
+- ENVIRONMENT: "production"
+- DEBUG: "False"
+- BACKEND_CORS_ORIGINS: "https://chores.arigsela.com"
+
+## Resource Allocation
+Backend: 200m-500m CPU, 256Mi-512Mi memory (x2 replicas)
+Frontend: 100m-200m CPU, 128Mi-256Mi memory (x2 replicas)
+
+## Health Monitoring
+Backend probes:
+- Liveness: GET /health (90s initial delay, 30s period)
+- Readiness: GET /health (60s initial delay, 10s period)
+
+Frontend probes:
+- Liveness: GET /health (30s initial delay, 10s period)
+- Readiness: GET /health (5s initial delay, 5s period)
+
+## Known Deployment Considerations
+- Backend takes 5-6 minutes for initial startup (expected behavior)
+- Database must be available before backend starts (PostgreSQL cluster)
+- Frontend connects to backend via external URL (not internal DNS)
+- ECR credentials are refreshed by a CronJob in each namespace

@@ -2,8 +2,8 @@
 
 **Created:** 2026-03-01
 **Last Updated:** 2026-03-01
-**Current Status:** Phase 4 Complete — Template Actions & Integration
-**Overall Progress:** 20/28 tasks (71%)
+**Current Status:** Phase 5 In Progress — Chores Tracker Knowledge Agent
+**Overall Progress:** 23/28 tasks (82%)
 
 ---
 
@@ -400,7 +400,7 @@ Comprehensive audit of ALL content files:
 ### Phase 5: First Use Case — Chores Tracker Knowledge Agent (5 tasks)
 
 #### Task 5.1: Execute Template for Chores Tracker
-**Status:** ⬜ Pending
+**Status:** ⬜ Pending (requires running Backstage UI)
 
 Run the template from Backstage UI with these parameters:
 - **name:** `chores-knowledge-agent`
@@ -418,28 +418,28 @@ Run the template from Backstage UI with these parameters:
 - **vaultRole:** `chores-knowledge-agent`
 
 #### Task 5.2: Populate Knowledge Sources
-**Status:** ⬜ Pending
-**Files (in new repo):** `config/knowledge/`
+**Status:** ✅ Complete
+**Files:** `examples/templates/crewai-agent/examples/chores-tracker-knowledge/`
 
-Create knowledge source files:
-- `api-docs.json` — Chores Tracker API endpoints, request/response schemas
-- `architecture.txt` — System architecture: FastAPI backend, MySQL DB, HTMX frontend, K8s deployment
-- `deployment-guide.txt` — How chores-tracker is deployed (ArgoCD, ECR, Vault secrets)
-- `troubleshooting.txt` — Common issues, health check endpoints, dependency chain
-- `data-model.txt` — Database schema, entity relationships
+Created 5 comprehensive knowledge source files based on research of actual K8s manifests:
+- `api-docs.json` — Full API endpoint catalog with paths, methods, auth, schemas (REST)
+- `architecture.txt` — System architecture: FastAPI backend, PostgreSQL (CloudNativePG), HTMX frontend, K8s deployment
+- `deployment-guide.txt` — GitOps deployment via ArgoCD, canary strategy, Vault secrets, ECR images
+- `troubleshooting.txt` — 7 issue categories with diagnostic steps, kubectl commands, solutions
+- `data-model.txt` — PostgreSQL schema (Users, Families, Chores, Rewards), relationships, constraints
 
 #### Task 5.3: Implement Domain-Specific Tools
-**Status:** ⬜ Pending
-**Files (in new repo):** `src/knowledge-agent/tools.py`
+**Status:** ✅ Complete
+**Files:** `examples/templates/crewai-agent/examples/chores-tracker-knowledge/tools.py`
 
-Replace placeholder tools with chores-tracker specific tools:
-- `query_knowledge(question: str)` — RAG query against knowledge files
-- `get_api_endpoint_info(endpoint_path: str)` — Look up API endpoint details
-- `get_deployment_status()` — Check chores-tracker K8s deployment health (optional, could call K8s API)
-- `search_troubleshooting(issue: str)` — Search troubleshooting runbooks
+Created 4 domain-specific tools replacing placeholders:
+- `query_knowledge(question)` — Keyword search across all .txt knowledge files, returns matching sections
+- `get_api_endpoint_info(endpoint_path)` — Structured lookup in api-docs.json with recursive category search
+- `search_troubleshooting(issue)` — Section-based search in troubleshooting.txt with fallback diagnostics
+- `check_health(component)` — Returns deployment config, resources, and diagnostic commands per component
 
 #### Task 5.4: Deploy to Kubernetes
-**Status:** ⬜ Pending
+**Status:** ⬜ Pending (requires template execution + image build + Vault setup)
 
 1. Build Docker images and push to ECR
 2. Create Vault secrets (`chores-knowledge-agent` path)
@@ -448,7 +448,7 @@ Replace placeholder tools with chores-tracker specific tools:
 5. Commit and push — ArgoCD auto-deploys
 
 #### Task 5.5: Verify End-to-End
-**Status:** ⬜ Pending
+**Status:** ⬜ Pending (requires running deployment)
 
 1. Confirm pods are running in `chores-knowledge-agent` namespace
 2. Test orchestrator health endpoint
@@ -458,6 +458,12 @@ Replace placeholder tools with chores-tracker specific tools:
    - "The chores-tracker backend is returning 500 errors, what should I check?"
 4. Verify knowledge RAG is returning relevant context
 5. Confirm entity appears in Backstage catalog with Kubernetes tab
+
+**Phase 5 Summary (Partial):** Tasks 5.2 and 5.3 complete — created comprehensive knowledge files and domain-specific tools in `examples/chores-tracker-knowledge/`:
+- 5 knowledge files covering architecture, API, deployment, troubleshooting, and data model (researched from actual K8s manifests)
+- 4 domain-specific tools (query_knowledge, get_api_endpoint_info, search_troubleshooting, check_health)
+- README with template parameters and usage instructions
+Tasks 5.1, 5.4, 5.5 require user interaction: running the template from Backstage UI, building Docker images, deploying to K8s, and verifying end-to-end.
 
 ---
 
@@ -555,6 +561,6 @@ Required keys:
 | Phase 2: Agent Code Templates | ✅ Complete | 7/7 | 100% |
 | Phase 3: K8s Manifest Templates | ✅ Complete | 5/5 | 100% |
 | Phase 4: Template Actions | ✅ Complete | 4/4 | 100% |
-| Phase 5: Chores Tracker Agent | ⬜ Not Started | 0/5 | 0% |
+| Phase 5: Chores Tracker Agent | 🔄 In Progress | 2/5 | 40% |
 | Phase 6: Documentation | ⬜ Not Started | 0/3 | 0% |
-| **Total** | | **20/28** | **71%** |
+| **Total** | | **23/28** | **82%** |
