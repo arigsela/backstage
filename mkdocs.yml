@@ -1,0 +1,6 @@
+site_name: Backstage Developer Portal
+site_description: Internal developer portal documentation for the Backstage deployment.
+nav:
+  - Home: index.md
+plugins:
+  - techdocs-core

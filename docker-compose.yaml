@@ -1,0 +1,168 @@
+# ==============================================================================
+# Docker Compose - Local Development Services
+# ==============================================================================
+#
+# PURPOSE:
+# Provides a local PostgreSQL database for Backstage development.
+# This replaces the default SQLite in-memory database, giving you:
+#   - Data persistence across backend restarts (via a Docker volume)
+#   - PostgreSQL-specific features like full-text search (pg_search plugin)
+#   - A local environment that matches production (where PG is also used)
+#
+# USAGE:
+#   docker compose up -d          # Start PostgreSQL in the background
+#   docker compose down            # Stop PostgreSQL (data persists in volume)
+#   docker compose down -v         # Stop AND delete all data (fresh start)
+#   docker compose logs postgres   # View PostgreSQL logs
+#
+# THEN START BACKSTAGE:
+#   yarn dev                       # Backstage connects to local PG via app-config.local.yaml
+#
+# HOW IT CONNECTS:
+#   Backstage reads database config from app-config.yaml (base) merged with
+#   app-config.local.yaml (local overrides). The local override points to
+#   localhost:5432 with the credentials defined below.
+# ==============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  # PostgreSQL is the recommended production database for Backstage.
+  # Each Backstage backend plugin creates its own schema/tables automatically
+  # on first startup (using Knex.js migrations).
+  #
+  # WHY ALPINE?
+  # The Alpine variant is ~70% smaller than the default image (~80MB vs ~250MB),
+  # which speeds up initial pulls and uses less disk space.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped  # Auto-restart if the container crashes (but not if you manually stop it)
+
+    # ENVIRONMENT VARIABLES:
+    # These are read by the PostgreSQL entrypoint script to create the initial
+    # database and superuser on first startup. After that, they're ignored
+    # (the data is already in the volume).
+    #
+    # IMPORTANT: These must match what Backstage uses to connect.
+    # The matching Backstage config is in app-config.local.yaml.
+    environment:
+      POSTGRES_DB: backstage        # Database name created on first run
+      POSTGRES_USER: backstage      # Superuser username
+      POSTGRES_PASSWORD: backstage  # Superuser password (fine for local dev!)
+
+    # PORT MAPPING:
+    # Maps container port 5432 to host port 5432, so Backstage (running on
+    # the host via `yarn dev`) can connect to localhost:5432.
+    #
+    # If port 5432 is already in use (e.g., you have a system PostgreSQL),
+    # change the left side: "5433:5432" and update app-config.local.yaml.
+    ports:
+      - '5432:5432'
+
+    # VOLUME:
+    # Mounts a named Docker volume to PostgreSQL's data directory.
+    # This means your data survives container restarts and recreations.
+    # Only `docker compose down -v` (with -v flag) deletes the volume.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+    # HEALTHCHECK:
+    # Docker (and Backstage's depends_on in Phase 5) use this to know when
+    # PostgreSQL is ready to accept connections. pg_isready is a utility
+    # bundled with PostgreSQL that checks if the server is accepting connections.
+    #
+    # - interval: Check every 5 seconds
+    # - timeout: Fail if pg_isready doesn't respond within 5 seconds
+    # - retries: Mark unhealthy after 5 consecutive failures (25 seconds max)
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U backstage -d backstage']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Backstage Backend + Frontend
+  # ---------------------------------------------------------------------------
+  # Serves the full Backstage application (backend API + bundled frontend).
+  # This service is optional for local development (where you use `yarn dev`),
+  # but required for testing the production Docker image locally.
+  #
+  # USAGE:
+  #   1. Build the backend first (from the repo root):
+  #        yarn install --immutable
+  #        yarn tsc
+  #        yarn build:backend
+  #   2. Build the Docker image:
+  #        docker image build . -f packages/backend/Dockerfile --tag backstage:local
+  #   3. Start everything:
+  #        docker compose --profile full up -d
+  #
+  # The 'full' profile means this service only starts when explicitly requested.
+  # Running `docker compose up -d` (without --profile) still starts only PostgreSQL,
+  # so your existing `yarn dev` workflow is unchanged.
+  # ---------------------------------------------------------------------------
+  backstage:
+    image: backstage:local  # Built locally via `docker image build`
+    profiles: ['full']      # Only starts with: docker compose --profile full up -d
+    restart: unless-stopped
+
+    # ENVIRONMENT VARIABLES:
+    # These configure the Backstage backend inside the container.
+    # In production (Kubernetes), these come from K8s Secrets instead.
+    #
+    # POSTGRES_HOST is 'postgres' — the Docker Compose service name.
+    # Docker Compose creates a shared network where services can reach each
+    # other by service name. So 'postgres' resolves to the PostgreSQL container's IP.
+    environment:
+      # Database connection (pointing to the postgres service above)
+      POSTGRES_HOST: postgres         # Docker service name = hostname on the shared network
+      POSTGRES_PORT: '5432'
+      POSTGRES_USER: backstage
+      POSTGRES_PASSWORD: backstage
+
+      # GitHub Integration (for catalog reads, scaffolder, etc.)
+      # Replace with your actual token, or use a .env file:
+      #   echo "GITHUB_TOKEN=ghp_..." >> .env
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+
+      # GitHub OAuth (for user sign-in)
+      AUTH_GITHUB_CLIENT_ID: ${AUTH_GITHUB_CLIENT_ID:-}
+      AUTH_GITHUB_CLIENT_SECRET: ${AUTH_GITHUB_CLIENT_SECRET:-}
+
+      # Kubernetes plugin (optional — only if testing K8s integration)
+      K8S_CLUSTER_URL: ${K8S_CLUSTER_URL:-}
+      K8S_SERVICE_ACCOUNT_TOKEN: ${K8S_SERVICE_ACCOUNT_TOKEN:-}
+
+    # PORT MAPPING:
+    # Maps the container's port 7007 to the host's port 7007.
+    # Access Backstage at http://localhost:7007 (both frontend and API).
+    ports:
+      - '7007:7007'
+
+    # STARTUP ORDERING:
+    # Wait for PostgreSQL to be healthy before starting Backstage.
+    # 'service_healthy' means Docker waits until the postgres healthcheck passes
+    # (pg_isready succeeds). Without this, Backstage might start before PG is ready
+    # and crash with connection errors.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    # HEALTHCHECK:
+    # Backstage exposes a /healthcheck endpoint that returns 200 when ready.
+    # This is used by Docker (and later by Kubernetes liveness/readiness probes).
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:7007/healthcheck || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s  # Give Backstage time to initialize all plugins before checking
+
+# NAMED VOLUMES:
+# Declaring volumes here lets Docker manage the storage location.
+# You can inspect it with: docker volume inspect backstage_pgdata
+volumes:
+  pgdata:
+    driver: local  # Uses the default local filesystem driver

@@ -1,0 +1,45 @@
+# ==============================================================================
+# Backstage Self-Registration (catalog-info.yaml)
+# ==============================================================================
+#
+# WHAT IS THIS FILE?
+# Every entity in Backstage's Software Catalog is defined by a YAML file like this.
+# This particular file registers the Backstage app itself as a Component in its own catalog.
+# It's "self-referencing" — Backstage tracks itself as a software component.
+#
+# WHERE IS IT LOADED FROM?
+# This file is NOT in the catalog.locations config. It's used when you manually
+# register the repo via the Catalog Import page (/catalog-import) by pointing to
+# the repo URL. Backstage looks for a file named `catalog-info.yaml` at the repo root.
+#
+# ENTITY STRUCTURE:
+# All Backstage entities follow the same schema:
+#   apiVersion: backstage.io/v1alpha1   (always this for now)
+#   kind: Component|API|System|...      (the entity type)
+#   metadata:                           (name, description, annotations, labels, tags)
+#   spec:                               (kind-specific fields)
+#
+# ANNOTATIONS:
+# Annotations connect entities to external tools and Backstage plugins:
+#   github.com/project-slug: org/repo         -> GitHub plugin (CI/CD, PRs, issues)
+#   backstage.io/techdocs-ref: dir:.          -> TechDocs (where to find docs source)
+#   backstage.io/kubernetes-id: my-service    -> Kubernetes plugin (pod status)
+#   jenkins.io/job-full-name: my-job          -> Jenkins plugin
+# ==============================================================================
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: backstage-scaffold
+  description: An example of a Backstage application.
+  # ANNOTATIONS connect this entity to Backstage plugins:
+  #   backstage.io/techdocs-ref — Tells TechDocs where to find the MkDocs source files.
+  #     'dir:.' means "look in the same directory as this catalog-info.yaml" (the repo root).
+  #     TechDocs will look for mkdocs.yml in that directory and build the docs from there.
+  #   github.com/project-slug — Links to the GitHub repo for CI/CD status, PRs, etc.
+  annotations:
+    backstage.io/techdocs-ref: dir:.                   # Enables TechDocs for this entity
+    github.com/project-slug: arigsela/backstage        # Links to GitHub (PRs, Actions)
+spec:
+  type: website # Entity type: website, service, library, documentation, etc.
+  owner: john@example.com # Who owns this — should match a User or Group entity
+  lifecycle: experimental # Lifecycle stage: experimental, production, deprecated

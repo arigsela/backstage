@@ -1,0 +1,98 @@
+# ==============================================================================
+# Organizational Entities (examples/org.yaml)
+# ==============================================================================
+#
+# WHAT IS THIS FILE?
+# Defines the people (Users) and teams (Groups) in your organization.
+# These entities are important because:
+# 1. OWNERSHIP: Components, APIs, and Systems reference Users/Groups as owners
+# 2. SIGN-IN RESOLUTION: When a user signs in (e.g., via GitHub OAuth), Backstage
+#    maps their identity to a User entity. This is done by a "sign-in resolver"
+#    that matches GitHub username/email to the User entity's name/profile.
+# 3. PERMISSIONS: Access control policies can reference User/Group membership.
+#
+# MULTI-DOCUMENT YAML:
+# The `---` separator creates multiple YAML documents in one file.
+# Backstage reads each document as a separate entity.
+#
+# HOW USERS GET HERE:
+# Option A: Manually define them (like this file)
+# Option B: Auto-ingest from GitHub/GitLab org (using catalog-backend-module-github-org)
+# Option C: Sync from LDAP/Active Directory (using catalog-backend-module-ldap)
+#
+# ==============================================================================
+
+---
+# USER: guest
+# The default guest user for passwordless local development.
+# Matches the guest auth provider's default identity.
+# Keep this for local dev fallback when not using GitHub OAuth.
+# See: https://backstage.io/docs/features/software-catalog/descriptor-format#kind-user
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: guest # This matches the guest auth provider's default identity
+spec:
+  memberOf: [guests] # References the Group entity below by name
+
+---
+# USER: arisela (Phase 3)
+# Real user entity matching the GitHub username "arisela".
+#
+# WHY THE NAME MATTERS:
+# When you sign in via GitHub OAuth, the default sign-in resolver
+# (githubDefaultSignInResolver) looks up: user:default/<github-username>.
+# So if your GitHub username is "arisela", this entity's name MUST be "arisela".
+# If there's no matching User entity, sign-in will fail with an error.
+#
+# PROFILE FIELDS:
+# - displayName: Shown in the Backstage UI (header, ownership cards, etc.)
+# - email: Used for Gravatar avatar and can be used by email-based sign-in resolvers
+# - picture: Optional URL to a profile image (overrides Gravatar)
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: arigsela # MUST match your GitHub username exactly (case-sensitive)
+spec:
+  profile:
+    displayName: Ari Sela
+    email: arisela@users.noreply.github.com # GitHub noreply email (optional)
+  memberOf: [platform-engineering] # References the platform-engineering Group entity
+
+---
+# GROUP: guests
+# Default group for guest/anonymous users in local development.
+# Kept for backward compatibility with existing entity ownership references.
+# See: https://backstage.io/docs/features/software-catalog/descriptor-format#kind-group
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: guests
+spec:
+  type: team # Types: team, department, business-unit, etc. (freeform string)
+  children: [] # No sub-groups — empty hierarchy
+
+---
+# GROUP: platform-engineering (Phase 3)
+# Represents the Platform Engineering team.
+#
+# HOW GROUPS ARE USED:
+# 1. OWNERSHIP: Components can set `spec.owner: platform-engineering` to indicate
+#    this team owns them. Ownership is shown on entity pages and in the catalog.
+# 2. PERMISSIONS: Access control policies can reference group membership
+#    (e.g., "only platform-engineering members can deploy to production").
+# 3. ORG CHART: Groups form a hierarchy visible in the Backstage org plugin.
+#
+# MEMBERS vs MEMBEROF:
+# You can define membership in two directions:
+#   - Group.spec.members: ["arisela"] — list users in the group definition
+#   - User.spec.memberOf: ["platform-engineering"] — list groups in the user definition
+# Both are equivalent. We use `memberOf` on the User side (above) for clarity.
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: platform-engineering
+  description: Platform Engineering team responsible for developer portal and infrastructure
+spec:
+  type: team
+  children: [] # No sub-groups yet

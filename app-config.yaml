@@ -1,0 +1,309 @@
+# ==============================================================================
+# Backstage Main Configuration (app-config.yaml)
+# ==============================================================================
+#
+# HOW BACKSTAGE CONFIG WORKS:
+# Backstage uses a layered configuration system. Multiple config files are
+# merged together, with later files overriding earlier ones:
+#
+#   1. app-config.yaml          <-- This file (base defaults, always loaded)
+#   2. app-config.local.yaml    <-- Local overrides (gitignored, for your secrets)
+#   3. app-config.production.yaml  <-- Production overrides (loaded via CLI flag)
+#
+# Environment Variable Substitution:
+#   ${MY_VAR} — replaced at runtime with the value of the MY_VAR env variable.
+#   If the env var is missing, Backstage throws an error at startup.
+#
+# Config is accessible to both frontend and backend, BUT only keys under
+# specific "visibility" markers are sent to the frontend (for security).
+# See: https://backstage.io/docs/conf/writing
+# ==============================================================================
+
+# --- APP (Frontend) ---
+# These settings control the Backstage frontend application.
+app:
+  title: Scaffolded Backstage App # Shown in the browser tab and header
+  baseUrl: http://localhost:3000 # URL where the frontend is served (dev server port)
+
+# --- ORGANIZATION ---
+# Your company/team name, shown in the UI sidebar and used for branding.
+organization:
+  name: My Company
+
+# --- BACKEND ---
+# Configuration for the Backstage backend server.
+backend:
+  # SERVICE-TO-SERVICE AUTH (commented out for dev):
+  # In production, backend plugins authenticate with each other using a shared secret.
+  # Without this, each backend restart generates new signing keys, breaking cross-service auth.
+  # TODO (Phase 7): Uncomment and set BACKEND_SECRET for production.
+  # auth:
+  #   keys:
+  #     - secret: ${BACKEND_SECRET}
+
+  baseUrl: http://localhost:7007 # URL where the backend API is accessible
+  listen:
+    port: 7007 # Port the backend HTTP server binds to
+    # host: 127.0.0.1  # Uncomment to restrict to localhost only (more secure)
+
+  # CONTENT SECURITY POLICY (CSP):
+  # Controls which external resources the browser is allowed to load.
+  # 'self' = same origin, plus allow any http/https for API calls.
+  # These follow the Helmet.js format: https://helmetjs.github.io/#reference
+  csp:
+    connect-src: ["'self'", 'http:', 'https:']
+
+  # CORS (Cross-Origin Resource Sharing):
+  # Controls which domains can make API requests to the backend.
+  # Must match the frontend URL, otherwise the browser blocks requests.
+  cors:
+    origin: http://localhost:3000 # Must match app.baseUrl
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true # Allow cookies/auth headers in cross-origin requests
+
+  # DATABASE:
+  # Backstage uses Knex.js under the hood for database access. Each backend
+  # plugin gets its own database schema, created automatically on first startup.
+  #
+  # We use PostgreSQL for both local dev (via Docker Compose) and production.
+  # This ensures consistent behavior across environments — especially important
+  # for the PG-based search engine and catalog indexing.
+  #
+  # Connection details use env var substitution (${VAR}). For local dev, these
+  # are overridden by hardcoded values in app-config.local.yaml (which is
+  # gitignored). For production, the env vars are injected by Kubernetes secrets.
+  database:
+    client: pg  # PostgreSQL driver (the `pg` npm package, already in dependencies)
+    connection:
+      host: ${POSTGRES_HOST}      # Docker Compose: overridden to 'localhost' in app-config.local.yaml
+      port: ${POSTGRES_PORT}      # Default: 5432
+      user: ${POSTGRES_USER}      # Database username
+      password: ${POSTGRES_PASSWORD}  # Database password
+
+  # workingDirectory: /tmp  # Scaffolder temp directory for template operations
+
+# --- INTEGRATIONS ---
+# Integrations connect Backstage to external source control systems.
+# Used by: Catalog (reading YAML from repos), Scaffolder (creating repos),
+# TechDocs (fetching docs from repos), and Catalog Import.
+integrations:
+  github:
+    - host: github.com
+      # Personal Access Token (PAT) for GitHub API access.
+      # Scopes needed: repo (for private repos), read:org (for org ingestion)
+      # Create at: https://github.com/settings/tokens
+      # Value is read from the GITHUB_TOKEN environment variable.
+      token: ${GITHUB_TOKEN}
+    ### GitHub Enterprise example:
+    # - host: ghe.example.net
+    #   apiBaseUrl: https://ghe.example.net/api/v3
+    #   token: ${GHE_TOKEN}
+
+# --- PROXY ---
+# The proxy backend lets the frontend call external APIs through the backend.
+# Use cases: bypassing CORS restrictions, adding auth headers, hiding API keys.
+# Requests to /api/proxy/<endpoint> are forwarded to the target URL.
+proxy:
+  ### Example:
+  # endpoints:
+  #   '/test':
+  #     target: 'https://example.com'
+  #     changeOrigin: true
+
+# --- TECHDOCS ---
+# TechDocs renders MkDocs-powered documentation directly inside Backstage.
+# Entities with the `backstage.io/techdocs-ref` annotation get a "Docs" tab.
+#
+# Builder modes:
+#   'local'    — Backstage builds docs on-the-fly (requires Docker running)
+#   'external' — Docs pre-built in CI/CD pipeline (recommended for production)
+#
+# Publisher modes:
+#   'local'     — Stores built docs on local filesystem
+#   'googleGcs' — Google Cloud Storage
+#   'awsS3'     — Amazon S3
+techdocs:
+  builder: 'local'
+  generator:
+    runIn: 'docker' # 'docker' runs mkdocs inside a container, 'local' needs mkdocs installed
+  publisher:
+    type: 'local'
+
+# --- AUTH ---
+# Authentication providers that users can sign in with.
+# Each provider maps to a backend module that handles the OAuth/identity flow.
+#
+# HOW AUTH PROVIDERS WORK:
+# 1. A "provider" config (here) tells the backend which OAuth services to support
+# 2. A "provider module" (registered in index.ts) handles the OAuth flow
+# 3. A "sign-in resolver" maps the external identity to a Backstage User entity
+#
+# PROVIDER ENVIRONMENTS:
+# Each provider has named environments (e.g., "development", "production").
+# Backstage selects the environment matching `NODE_ENV` (default: "development").
+# This lets you use different OAuth apps for different environments.
+#
+# The 'guest' provider allows passwordless sign-in (for development only!).
+auth:
+  providers:
+    # NOTE: guest auth is NOT in this file. It's only in app-config.local.yaml
+    # (gitignored) so it's available for local development but never in production.
+
+    # GITHUB OAUTH:
+    # Uses a GitHub OAuth App for real user authentication.
+    # The default sign-in resolver (githubDefaultSignInResolver) maps the GitHub
+    # username to a Backstage User entity: github user "arisela" → user:default/arisela.
+    # This means you MUST have a matching User entity in org.yaml.
+    #
+    # Setup: Create an OAuth App at https://github.com/settings/developers
+    #   - Homepage URL: http://localhost:3000
+    #   - Callback URL: http://localhost:7007/api/auth/github/handler/frame
+    #
+    # The clientId and clientSecret use env var substitution so secrets stay out of Git.
+    # For local dev, override these in app-config.local.yaml (gitignored).
+    github:
+      development:
+        clientId: ${AUTH_GITHUB_CLIENT_ID}
+        clientSecret: ${AUTH_GITHUB_CLIENT_SECRET}
+        # SIGN-IN RESOLVER:
+        # Tells Backstage how to map a GitHub identity to a Backstage User entity.
+        # Without this, the provider only does authentication (proving who you are)
+        # but NOT sign-in (linking you to a catalog User entity).
+        #
+        # `usernameMatchingUserEntityName` maps:
+        #   GitHub username "arisela" → catalog entity user:default/arisela
+        # This requires a matching User entity in org.yaml with metadata.name: arisela
+        signIn:
+          resolvers:
+            - resolver: usernameMatchingUserEntityName
+
+# --- SCAFFOLDER ---
+# Configuration for Software Templates (the "Create" page).
+scaffolder:
+  # See: https://backstage.io/docs/features/software-templates/configuration
+
+# --- CATALOG ---
+# The Software Catalog is the central registry of all entities in your organization.
+#
+# HOW THE CATALOG INGESTS ENTITIES:
+# 1. You define "locations" — pointers to YAML files containing entity definitions
+# 2. The catalog processor reads those files on a refresh schedule (~100s default)
+# 3. Entities are validated against the entity schema, relations are computed
+# 4. Entities appear in the catalog UI with their metadata, ownership, and links
+catalog:
+  import:
+    entityFilename: catalog-info.yaml # Default filename when importing from repos
+    pullRequestBranchName: backstage-integration # Branch name for import PRs
+
+  # ENTITY RULES: Which entity kinds are allowed from catalog locations.
+  # This is a security measure — it prevents locations from injecting unexpected entity types.
+  # User and Group entities need explicit rules (see the org.yaml location below).
+  rules:
+    - allow: [Component, System, API, Resource, Location]
+
+  # LOCATIONS: Where the catalog finds entity YAML files.
+  # Types: 'file' (local filesystem), 'url' (remote HTTP), 'github-discovery' (auto-scan repos)
+  # File paths are relative to the backend process working directory (packages/backend/).
+  locations:
+    # Self-registration: this Backstage app as a Component in its own catalog.
+    # The catalog-info.yaml at the repo root has the techdocs-ref annotation,
+    # so registering it here makes the TechDocs "Docs" tab available.
+    - type: file
+      target: ../../catalog-info.yaml
+
+    # Example entities: a System, Component, and API (see examples/entities.yaml)
+    - type: file
+      target: ../../examples/entities.yaml
+
+    # Example software template (see examples/template/template.yaml)
+    - type: file
+      target: ../../examples/template/template.yaml
+      rules:
+        - allow: [Template] # Only Template entities allowed from this location
+
+    # Example organizational data: users and groups (see examples/org.yaml)
+    - type: file
+      target: ../../examples/org.yaml
+      rules:
+        - allow: [User, Group] # Only User and Group entities allowed
+
+    ## Remote examples from the Backstage repo (uncomment to explore):
+    # - type: url
+    #   target: https://github.com/backstage/backstage/blob/master/packages/catalog-model/examples/all.yaml
+    # - type: url
+    #   target: https://github.com/backstage/backstage/blob/master/packages/catalog-model/examples/acme-corp.yaml
+    #   rules:
+    #     - allow: [User, Group]
+
+  # PROVIDERS: Auto-discovery of entities from external sources.
+  # Instead of manually registering each repo's catalog-info.yaml as a location,
+  # providers automatically scan and import entities on a schedule.
+  #
+  # HOW GITHUB DISCOVERY WORKS:
+  # 1. On the configured schedule, the provider calls the GitHub API
+  # 2. It lists all repos in the configured organization/user
+  # 3. For each repo matching the filter, it checks for the catalogPath file
+  # 4. Valid entities found are automatically imported into the catalog
+  # 5. Entities are refreshed on the schedule — updates in GitHub appear after the next scan
+  #
+  # IMPORTANT: This uses the GITHUB_TOKEN from integrations.github (configured above).
+  # The token needs 'repo' scope to read private repos, or just public access for public repos.
+  providers:
+    github:
+      # Provider ID — a unique name for this discovery source (can be anything).
+      # You can add multiple providers (e.g., one per GitHub org or user).
+      arigsela:
+        organization: 'arigsela'           # GitHub user or organization to scan
+        catalogPath: '/catalog-info.yaml'  # Path to look for in each repo (default)
+        filters:
+          repository: '.*'                 # Regex filter: '.*' means all repos
+        schedule:
+          frequency: { minutes: 30 }       # How often to scan for new/updated repos
+          timeout: { minutes: 3 }          # Max time for a single scan run
+
+# --- KUBERNETES ---
+# The Kubernetes plugin shows pod/deployment status directly on entity pages.
+# Entities with the `backstage.io/kubernetes-id` annotation get a "Kubernetes" tab
+# that displays live status of matching workloads in your clusters.
+#
+# HOW IT WORKS:
+# 1. "Service Locator" decides which clusters to query for a given entity.
+#    - 'multiTenant': queries ALL clusters for matching resources (simplest setup)
+#    - 'singleTenant': each entity specifies its cluster via annotation
+#
+# 2. "Cluster Locator" tells the plugin how to find and connect to clusters.
+#    - 'config': clusters defined right here in config (used below)
+#    - 'localKubectlProxy': uses `kubectl proxy` (requires running proxy process)
+#    - 'gke': auto-discovers Google Kubernetes Engine clusters
+#
+# 3. The plugin searches for resources matching the entity's `kubernetes-id` annotation
+#    by checking labels (backstage.io/kubernetes-id) on K8s resources.
+#
+# PRODUCTION CONFIG:
+# Uses ServiceAccount token for in-cluster authentication.
+# The token and URL are injected via environment variables (K8s Secrets).
+#
+# LOCAL DEV CONFIG:
+# Overridden in app-config.local.yaml to use kubeconfig-based auth,
+# which reads credentials from your local ~/.kube/config file.
+#
+# See: https://backstage.io/docs/features/kubernetes/configuration
+kubernetes:
+  serviceLocatorMethod:
+    type: 'multiTenant' # Query ALL configured clusters for each entity
+  clusterLocatorMethods:
+    - type: 'config' # Clusters defined inline in this config
+      clusters:
+        - url: ${K8S_CLUSTER_URL}                       # Kubernetes API server URL (e.g., https://10.0.1.50:6443)
+          name: homelab                                  # Display name in the Backstage UI
+          authProvider: 'serviceAccount'                 # Use ServiceAccount token (production / in-cluster)
+          skipTLSVerify: true                            # Skip TLS verification (self-signed certs in homelab)
+          serviceAccountToken: ${K8S_SERVICE_ACCOUNT_TOKEN}  # Token injected via K8s Secret
+
+# --- PERMISSIONS ---
+# The permissions framework controls access to Backstage features.
+# When enabled, plugins can check "can this user do X?" before allowing actions.
+# The actual policy (allow-all vs. custom) is set in the backend (index.ts).
+# See: https://backstage.io/docs/permissions/getting-started
+permission:
+  enabled: true # Set to false to completely disable permission checks

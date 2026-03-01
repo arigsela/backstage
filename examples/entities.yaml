@@ -1,0 +1,108 @@
+# ==============================================================================
+# Example Catalog Entities (examples/entities.yaml)
+# ==============================================================================
+#
+# WHAT IS THIS FILE?
+# Demonstrates the three core entity kinds that model software in Backstage:
+# 1. SYSTEM — A collection of related components and APIs (e.g., "payments system")
+# 2. COMPONENT — A piece of software (service, website, library, etc.)
+# 3. API — An interface that a component exposes for others to consume
+#
+# ENTITY RELATIONSHIPS (how they connect):
+#   System "examples"
+#     └── Component "example-website" (belongs to system via spec.system)
+#           └── API "example-grpc-api" (provided by component via spec.providesApis)
+#
+# These relationships create the entity graph you see in the Catalog Graph page.
+#
+# THE BACKSTAGE MODEL (from broadest to narrowest):
+#   Domain > System > Component > API
+#   - Domain: Business area (e.g., "Payments", "User Management")
+#   - System: A set of cooperating components (e.g., "Payment Processing System")
+#   - Component: A deployable unit (e.g., "payment-service", "payment-ui")
+#   - API: An interface boundary (e.g., "POST /payments", gRPC service, GraphQL schema)
+#
+# See: https://backstage.io/docs/features/software-catalog/system-model
+# ==============================================================================
+
+---
+# SYSTEM: A logical grouping of components that work together.
+# Systems help organize large catalogs by grouping related software.
+# In the UI, systems get their own page showing all member components and APIs.
+# See: https://backstage.io/docs/features/software-catalog/descriptor-format#kind-system
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: examples
+spec:
+  owner: guests # The team responsible for this system
+
+---
+# COMPONENT: A piece of software — the most common entity kind.
+# Components represent things you deploy, maintain, and own:
+# services, websites, libraries, data pipelines, mobile apps, etc.
+#
+# Key spec fields:
+#   type: What kind of software (website, service, library, documentation)
+#   lifecycle: Current stage (experimental -> production -> deprecated)
+#   owner: The User or Group responsible (must exist in the catalog!)
+#   system: Which System this belongs to (creates a relationship)
+#   providesApis: APIs this component exposes (creates "providesApi" relations)
+#   consumesApis: APIs this component calls (creates "consumesApi" relations)
+#   dependsOn: Other components or resources this depends on
+#
+# See: https://backstage.io/docs/features/software-catalog/descriptor-format#kind-component
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: example-website
+  # ANNOTATIONS connect this entity to Backstage plugins.
+  # backstage.io/kubernetes-id: The Kubernetes plugin uses this annotation to find
+  # matching workloads in your clusters. It looks for K8s resources with a label
+  # `backstage.io/kubernetes-id: example-website`. If you deploy a workload with
+  # that label, it will appear on this entity's Kubernetes tab.
+  annotations:
+    backstage.io/kubernetes-id: example-website
+spec:
+  type: website
+  lifecycle: experimental
+  owner: guests
+  system: examples # This component belongs to the "examples" System
+  providesApis: [example-grpc-api] # This component exposes the gRPC API below
+
+---
+# API: Defines an interface boundary between components.
+# APIs are first-class entities because they represent the contracts between teams.
+# Having APIs in the catalog lets developers discover and understand available interfaces.
+#
+# API types (spec.type):
+#   openapi  — REST APIs defined with OpenAPI/Swagger spec
+#   asyncapi — Event-driven APIs defined with AsyncAPI spec
+#   graphql  — GraphQL schemas
+#   grpc     — gRPC services defined with Protocol Buffers
+#
+# The `definition` field contains the actual API specification inline.
+# For larger specs, you can use `$text` to reference an external file:
+#   definition:
+#     $text: ./api-spec.proto
+#
+# See: https://backstage.io/docs/features/software-catalog/descriptor-format#kind-api
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: example-grpc-api
+spec:
+  type: grpc
+  lifecycle: experimental
+  owner: guests
+  system: examples
+  definition: |
+    syntax = "proto3";
+
+    service Exampler {
+      rpc Example (ExampleMessage) returns (ExampleMessage) {};
+    }
+
+    message ExampleMessage {
+      string example = 1;
+    };

@@ -1,0 +1,46 @@
+# ==============================================================================
+# Docker Build Exclusions (.dockerignore)
+# ==============================================================================
+#
+# PURPOSE:
+# Controls which files are sent to the Docker daemon as "build context".
+# Excluding unnecessary files makes builds faster and images smaller.
+# Also prevents secrets from accidentally ending up in the Docker image.
+#
+# HOW IT WORKS:
+# When you run `docker build .`, Docker packages the entire directory as a
+# tarball and sends it to the Docker daemon. .dockerignore filters this
+# tarball — excluded files never reach the daemon or the image layers.
+# ==============================================================================
+
+# Git history — not needed in the image, can be very large
+.git
+
+# Yarn cache — dependencies are installed fresh during docker build
+.yarn/cache
+.yarn/install-state.gz
+
+# Node modules — rebuilt inside the container for the correct platform/architecture
+node_modules
+
+# Source code — the backend is compiled to dist/bundle.tar.gz, source isn't needed
+# This also means TypeScript files, tests, etc. are excluded from the image
+packages/*/src
+packages/*/node_modules
+
+# Frontend plugins source — not needed, the app is bundled into the backend
+plugins
+
+# SECURITY: Local config files and env files that contain secrets
+# These are gitignored AND dockerignored to prevent credential leaks.
+# The production image uses environment variables for all secrets instead.
+*.local.yaml
+.env
+.env.*
+
+# Implementation plans and reference docs — not needed in the production image
+docs/plans
+docs/reference
+
+# Claude Code config — development tooling, not needed in production
+.claude

@@ -1,0 +1,101 @@
+# ==============================================================================
+# Backstage Production Configuration (app-config.production.yaml)
+# ==============================================================================
+#
+# HOW THIS FILE WORKS:
+# This file is loaded ON TOP of app-config.yaml, overriding values selectively.
+# It is loaded via the --config CLI flag in the Dockerfile CMD:
+#   node packages/backend --config app-config.yaml --config app-config.production.yaml
+#
+# KEY DIFFERENCES FROM DEVELOPMENT:
+# - Database: PostgreSQL instead of SQLite
+# - URLs: Should point to your actual production domain (currently still localhost!)
+# - Listen: Binds to all interfaces (0.0.0.0) so the container is reachable
+# - Catalog: File paths are relative to the Docker container's /app directory
+#
+# WHAT THIS FILE DOES NOT OVERRIDE:
+# Anything not listed here inherits from app-config.yaml. For example:
+# techdocs, integrations, proxy, scaffolder, permissions — all carry over.
+# ==============================================================================
+
+# --- APP ---
+# In production, the frontend is served BY the backend (via plugin-app-backend),
+# so app.baseUrl must match backend.baseUrl.
+# The domain must match the Kubernetes Ingress host and the GitHub OAuth callback URL.
+app:
+  baseUrl: https://backstage.arigsela.com
+
+# --- BACKEND ---
+backend:
+  # The baseUrl must be reachable by all clients (browsers, other services).
+  # This URL is used by the frontend to construct API requests to the backend.
+  baseUrl: https://backstage.arigsela.com
+
+  # Listen on all interfaces (0.0.0.0:7007) so the container is accessible.
+  # In development, we use `port: 7007` which also binds to all interfaces,
+  # but the shorthand ':7007' format is more explicit for production.
+  listen: ':7007'
+
+  # CORS: Override the base config (http://localhost:3000) with the production domain.
+  # In production, the frontend is served by the backend on the same origin,
+  # but CORS must still be explicitly configured for the backend API.
+  cors:
+    origin: https://backstage.arigsela.com
+
+  # POSTGRESQL DATABASE:
+  # Production uses PostgreSQL instead of SQLite for:
+  # - Data persistence across restarts
+  # - Concurrent access support
+  # - Full-text search (used by the PG search engine)
+  # - Production-grade reliability
+  #
+  # All connection details come from environment variables (set via K8s Secrets
+  # or Docker environment). This follows the 12-factor app methodology.
+  # Config options: https://node-postgres.com/apis/client
+  database:
+    client: pg # PostgreSQL driver (the `pg` npm package)
+    connection:
+      host: ${POSTGRES_HOST} # e.g., 'postgres' (Docker service name) or RDS endpoint
+      port: ${POSTGRES_PORT} # Default: 5432
+      user: ${POSTGRES_USER} # Database username
+      password: ${POSTGRES_PASSWORD} # Database password
+      # SSL configuration for managed databases (RDS, Cloud SQL, etc.):
+      # Uncomment and configure when using TLS connections.
+      # ssl:
+      #   ca:
+      #     $file: <file-path>/ca/server.crt
+
+# --- AUTH ---
+# Guest auth is NOT configured here or in app-config.yaml.
+# It only exists in app-config.local.yaml (gitignored) for local development.
+# In production, only GitHub OAuth is available (inherited from app-config.yaml).
+
+# --- CATALOG ---
+# Production catalog locations override the development ones.
+# NOTE: File paths differ! In the Docker container, the working directory is /app,
+# so paths are relative to /app (not packages/backend like in development).
+#
+# GitHub discovery (configured in app-config.yaml under catalog.providers.github)
+# is inherited from base config and auto-imports repos with catalog-info.yaml.
+# The file-based locations below provide baseline entities that are always present.
+catalog:
+  locations:
+    # Self-registration: Backstage registers itself as a Component entity.
+    # This enables TechDocs (via the techdocs-ref annotation in catalog-info.yaml).
+    - type: file
+      target: ./catalog-info.yaml
+
+    # Example entities — demo data bundled in the image (see Dockerfile).
+    # In the Docker container, examples/ is at /app/examples/.
+    - type: file
+      target: ./examples/entities.yaml
+
+    - type: file
+      target: ./examples/template/template.yaml
+      rules:
+        - allow: [Template]
+
+    - type: file
+      target: ./examples/org.yaml
+      rules:
+        - allow: [User, Group]
