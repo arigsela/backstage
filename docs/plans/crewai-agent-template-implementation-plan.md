@@ -2,8 +2,8 @@
 
 **Created:** 2026-03-01
 **Last Updated:** 2026-03-01
-**Current Status:** Phase 2 Complete — Templatized Agent Code
-**Overall Progress:** 11/28 tasks (39%)
+**Current Status:** Phase 3 Complete — K8s Manifest Templates
+**Overall Progress:** 16/28 tasks (57%)
 
 ---
 
@@ -254,7 +254,7 @@ All Python code wrapped in `{% raw %}...{% endraw %}` Nunjucks blocks to prevent
 All files go in `examples/templates/crewai-agent/content/k8s/`.
 
 #### Task 3.1: Namespace & ArgoCD Application
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files (in content/):**
 - `k8s/namespace.yaml` — Namespace with team label
 - `k8s/argocd-app.yaml` — ArgoCD Application manifest (source: `base-apps/${{ values.name }}/`, auto-sync, CreateNamespace)
@@ -262,13 +262,13 @@ All files go in `examples/templates/crewai-agent/content/k8s/`.
 The ArgoCD app manifest is included as a reference — the user copies it to `base-apps/${{ values.name }}.yaml` in the kubernetes repo.
 
 #### Task 3.2: Vault Secrets & External Secrets
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files (in content/):**
 - `k8s/secret-store.yaml` — SecretStore for Vault (`role: ${{ values.vaultRole }}`)
 - `k8s/external-secret.yaml` — ExternalSecrets for orchestrator + sub-agent (anthropic-api-key, api-keys)
 
 #### Task 3.3: Orchestrator K8s Manifests
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files (in content/):**
 - `k8s/orchestrator/deployment.yaml` — Deployment + ServiceAccount + Service
 - `k8s/orchestrator/configmap.yaml` — Internal service URLs, CORS config
@@ -277,17 +277,30 @@ The ArgoCD app manifest is included as a reference — the user copies it to `ba
 Follows oncall-crewai pattern: ECR image, secretKeyRef for sensitive env vars, envFrom for configmap, health checks on `/health`.
 
 #### Task 3.4: Sub-Agent K8s Manifests
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files (in content/):**
 - `k8s/${{ values.subAgentName }}/deployment.yaml` — Deployment + Service
 - `k8s/${{ values.subAgentName }}/configmap.yaml` — Agent URL, port config
 
 #### Task 3.5: Ingress & Networking
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files (in content/):**
 - `k8s/ingress.yaml` — Nginx ingress with TLS (cert-manager), IP whitelist, AI-appropriate timeouts (300s)
 
 Only generated if `${{ values.domain }}` is provided. Uses `cert-manager.io/cluster-issuer: letsencrypt-prod`.
+
+**Phase 3 Summary:** All 5 tasks complete. Created 10 templatized K8s manifests in `content/k8s/`:
+- `namespace.yaml` — Dedicated namespace with app/team labels
+- `argocd-app.yaml` — ArgoCD Application (auto-sync, prune, selfHeal, CreateNamespace)
+- `secret-store.yaml` — Vault SecretStore (K8s auth, configurable Vault role)
+- `external-secret.yaml` — ExternalSecrets for orchestrator + sub-agent (anthropic-api-key, api-keys)
+- `orchestrator/deployment.yaml` — Deployment + ServiceAccount + Service (ECR image, health probes, 256Mi/512Mi resources)
+- `orchestrator/configmap.yaml` — Non-sensitive env vars (log level, ports, sub-agent URL via K8s DNS)
+- `orchestrator/pvc.yaml` — 1Gi PVC for session/memory persistence
+- `${{ values.subAgentName }}/deployment.yaml` — Sub-agent Deployment + ServiceAccount + Service (internal only)
+- `${{ values.subAgentName }}/configmap.yaml` — Sub-agent config (host, port, A2A agent URL)
+- `ingress.yaml` — Nginx ingress with TLS (cert-manager), IP whitelist, 300s AI timeouts
+All manifests follow oncall-crewai patterns: ECR images, envFrom ConfigMaps, secretKeyRef for secrets, /health probes, non-root security context.
 
 ---
 
@@ -535,8 +548,8 @@ Required keys:
 |-------|--------|-------|------------|
 | Phase 1: Template Skeleton | ✅ Complete | 4/4 | 100% |
 | Phase 2: Agent Code Templates | ✅ Complete | 7/7 | 100% |
-| Phase 3: K8s Manifest Templates | ⬜ Not Started | 0/5 | 0% |
+| Phase 3: K8s Manifest Templates | ✅ Complete | 5/5 | 100% |
 | Phase 4: Template Actions | ⬜ Not Started | 0/4 | 0% |
 | Phase 5: Chores Tracker Agent | ⬜ Not Started | 0/5 | 0% |
 | Phase 6: Documentation | ⬜ Not Started | 0/3 | 0% |
-| **Total** | | **11/28** | **39%** |
+| **Total** | | **16/28** | **57%** |
