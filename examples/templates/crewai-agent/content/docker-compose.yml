@@ -1,0 +1,57 @@
+# ==============================================================================
+# Docker Compose — Local Development Stack
+# ==============================================================================
+#
+# HOW TO USE:
+#   docker-compose up --build        # Build images and start all services
+#   docker-compose up -d             # Start in background (detached)
+#   docker-compose logs -f           # Follow all logs
+#   docker-compose down              # Stop and remove containers
+#
+# NETWORKING:
+# Docker Compose creates a shared network. Services reference each other
+# by service name (e.g., http://orchestrator:${{ values.orchestratorPort }}).
+# This mirrors K8s internal DNS (http://service.namespace.svc:port).
+# ==============================================================================
+
+services:
+  # --- ORCHESTRATOR ---
+  # The "front door" — receives queries and routes to sub-agents.
+  orchestrator:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.orchestrator
+    ports:
+      - "${{ values.orchestratorPort }}:${{ values.orchestratorPort }}"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-anthropic/claude-sonnet-4-5-20250929}
+      - PROJECT_NAME=${{ values.name }}
+      - ORCHESTRATOR_PORT=${{ values.orchestratorPort }}
+      - SUB_AGENT_URL=http://${{ values.subAgentName }}:${{ values.subAgentPort }}
+      - API_KEYS=${API_KEYS:-}
+      - LOG_FORMAT=text
+      - LOG_LEVEL=INFO
+      - CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      - ${{ values.subAgentName }}
+    restart: unless-stopped
+
+  # --- SUB-AGENT ---
+  # Processes domain-specific queries with tools and knowledge.
+  ${{ values.subAgentName }}:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.${{ values.subAgentName }}
+    ports:
+      - "${{ values.subAgentPort }}:${{ values.subAgentPort }}"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-anthropic/claude-sonnet-4-5-20250929}
+      - PROJECT_NAME=${{ values.name }}
+      - SUB_AGENT_PORT=${{ values.subAgentPort }}
+      - AGENT_URL=http://${{ values.subAgentName }}:${{ values.subAgentPort }}
+      - API_KEYS=${API_KEYS:-}
+      - LOG_FORMAT=text
+      - LOG_LEVEL=INFO
+    restart: unless-stopped

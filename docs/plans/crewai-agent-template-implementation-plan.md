@@ -2,8 +2,8 @@
 
 **Created:** 2026-03-01
 **Last Updated:** 2026-03-01
-**Current Status:** Phase 1 Complete — Template Skeleton & Registration
-**Overall Progress:** 4/28 tasks (14%)
+**Current Status:** Phase 2 Complete — Templatized Agent Code
+**Overall Progress:** 11/28 tasks (39%)
 
 ---
 
@@ -164,7 +164,7 @@ Start Backstage locally (`yarn start`), navigate to `/create`, and verify the "C
 All files go in `examples/templates/crewai-agent/content/` and use Nunjucks templating (`${{ values.* }}`).
 
 #### Task 2.1: Shared Utilities (`src/shared/`)
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files (in content/):**
 - `src/shared/__init__.py`
 - `src/shared/config.py` — env var constants, model config
@@ -175,7 +175,7 @@ All files go in `examples/templates/crewai-agent/content/` and use Nunjucks temp
 Based on oncall-crewai `src/shared/` but with templatized project name and model config. These are largely copy-paste with comments added explaining each piece.
 
 #### Task 2.2: Orchestrator Code (`src/orchestrator/`)
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files (in content/):**
 - `src/orchestrator/__init__.py`
 - `src/orchestrator/main.py` — FastAPI app with health, invoke, auth endpoints
@@ -186,7 +186,7 @@ Based on oncall-crewai `src/shared/` but with templatized project name and model
 Simplified from oncall-crewai: single sub-agent routing (no combined routing needed), no CopilotKit integration, no session persistence (simpler starting point).
 
 #### Task 2.3: Sub-Agent Code (`src/${{ values.subAgentName }}/`)
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files (in content/):**
 - `src/${{ values.subAgentName }}/__init__.py`
 - `src/${{ values.subAgentName }}/server.py` — FastAPI + A2A mount, API key auth middleware
@@ -202,7 +202,7 @@ The agent code will conditionally include CrewAI knowledge source setup if `${{ 
 **Important:** Python code with `{ }` (dicts, f-strings, sets) must be wrapped in `{% raw %}...{% endraw %}` Nunjucks blocks to prevent template engine conflicts.
 
 #### Task 2.4: Root Project Files
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files (in content/):**
 - `README.md` — Project overview, setup instructions, architecture diagram
 - `pyproject.toml` — Build config with CrewAI, FastAPI, A2A dependencies
@@ -212,7 +212,7 @@ The agent code will conditionally include CrewAI knowledge source setup if `${{ 
 - `catalog-info.yaml` — Backstage entity with kubernetes-id annotation
 
 #### Task 2.5: Docker Configuration
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files (in content/):**
 - `docker/Dockerfile.orchestrator` — python:3.11-slim, port `${{ values.orchestratorPort }}`
 - `docker/Dockerfile.${{ values.subAgentName }}` — python:3.11-slim, port `${{ values.subAgentPort }}`
@@ -220,7 +220,7 @@ The agent code will conditionally include CrewAI knowledge source setup if `${{ 
 - `deploy-to-ecr.sh` — ECR build/push script for all images
 
 #### Task 2.6: Test Scaffolding
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files (in content/):**
 - `tests/__init__.py`
 - `tests/conftest.py` — Singleton reset fixtures
@@ -230,12 +230,22 @@ The agent code will conditionally include CrewAI knowledge source setup if `${{ 
 Provide ~10 skeleton tests that pass out of the box with the scaffolded code.
 
 #### Task 2.7: Knowledge Configuration (conditional)
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files (in content/):**
 - `config/knowledge/README.md` — How to add knowledge sources
 - `config/knowledge/.gitkeep` — Placeholder for knowledge files
 
 Only included when `enableKnowledge` is true. The README explains how to add `.txt`, `.json`, `.csv`, or `.pdf` files that the agent will use for RAG.
+
+**Phase 2 Summary:** All 7 tasks complete. Created 25+ templatized files in `content/`:
+- `src/shared/` — config, logging (text/JSON), Pydantic models with guardrails, observability callbacks
+- `src/orchestrator/` — FastAPI app, CrewAI Flow (classify→route→delegate), A2A delegate agent factory, keyword routing
+- `src/${{ values.subAgentName }}/` — FastAPI+A2A server, CrewAI agent with 3 placeholder tools, executor bridge, YAML configs
+- Root files: pyproject.toml, requirements.txt, .env.example, .gitignore, catalog-info.yaml, README.md
+- Docker: Dockerfiles for orchestrator + sub-agent, docker-compose.yml, deploy-to-ecr.sh
+- Tests: conftest.py, test_orchestrator.py (6 tests), test_sub_agent.py (8 tests)
+- Knowledge: config/knowledge/ with README and .gitkeep
+All Python code wrapped in `{% raw %}...{% endraw %}` Nunjucks blocks to prevent template engine conflicts.
 
 ---
 
@@ -524,9 +534,9 @@ Required keys:
 | Phase | Status | Tasks | Completion |
 |-------|--------|-------|------------|
 | Phase 1: Template Skeleton | ✅ Complete | 4/4 | 100% |
-| Phase 2: Agent Code Templates | ⬜ Not Started | 0/7 | 0% |
+| Phase 2: Agent Code Templates | ✅ Complete | 7/7 | 100% |
 | Phase 3: K8s Manifest Templates | ⬜ Not Started | 0/5 | 0% |
 | Phase 4: Template Actions | ⬜ Not Started | 0/4 | 0% |
 | Phase 5: Chores Tracker Agent | ⬜ Not Started | 0/5 | 0% |
 | Phase 6: Documentation | ⬜ Not Started | 0/3 | 0% |
-| **Total** | | **4/28** | **14%** |
+| **Total** | | **11/28** | **39%** |
