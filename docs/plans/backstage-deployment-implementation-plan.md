@@ -436,6 +436,19 @@ docker image build . -f packages/backend/Dockerfile --tag backstage:local
 
 ---
 
+## Related Work
+
+### CrewAI Agent Software Template
+A Backstage Software Template was created to enable self-service scaffolding of new CrewAI multi-agent projects. This extends the Backstage deployment with self-service AI agent deployment capabilities.
+
+- **Implementation Plan:** `docs/plans/crewai-agent-template-implementation-plan.md`
+- **Template:** `examples/templates/crewai-agent/template.yaml`
+- **Usage Guide:** `docs/guides/crewai-agent-template-guide.md`
+- **First Use Case:** Chores Tracker Knowledge Agent (knowledge files in `examples/templates/crewai-agent/examples/`)
+- **Status:** Template code complete (Phases 1-4), knowledge content ready (Phase 5 partial), pending UI testing and deployment (Phase 5.1/5.4/5.5)
+
+---
+
 ## End-to-End Testing
 1. Fresh clone -> `docker compose up` -> Backstage accessible with PostgreSQL
 2. GitHub OAuth sign-in -> resolves to correct User entity

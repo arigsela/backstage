@@ -2,8 +2,8 @@
 
 **Created:** 2026-03-01
 **Last Updated:** 2026-03-01
-**Current Status:** Phase 5 In Progress — Chores Tracker Knowledge Agent
-**Overall Progress:** 23/28 tasks (82%)
+**Current Status:** Phase 6 Complete — Documentation & Refinement
+**Overall Progress:** 26/28 tasks (93%)
 
 ---
 
@@ -470,31 +470,37 @@ Tasks 5.1, 5.4, 5.5 require user interaction: running the template from Backstag
 ### Phase 6: Documentation & Refinement (3 tasks)
 
 #### Task 6.1: Template Usage Guide
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files:** `docs/guides/crewai-agent-template-guide.md` (in backstage repo)
 
-Document:
-- How to use the template from Backstage UI
-- What each parameter means
-- What gets created (repo structure walkthrough)
-- How to deploy the generated project to K8s
+Comprehensive guide covering:
+- Prerequisites and navigation
+- 4-page wizard walkthrough with all parameter descriptions
+- Complete generated project structure diagram
+- Post-generation steps (tools, knowledge, local dev, tests, K8s deploy)
+- Switching from testing to production mode
+- Adding more sub-agents
 
 #### Task 6.2: Extension Guide
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files:** included in generated repo's `README.md`
 
-Document how to:
-- Add a new sub-agent to an existing project
-- Add new tools to a sub-agent
-- Add/modify knowledge sources
-- Configure custom routing keywords
-- Connect to the oncall-crewai frontend
+Enhanced the generated `content/README.md` with:
+- Knowledge source customization (adding RAG files, supported types)
+- Tool customization guide with `@tool` decorator example
+- Routing keyword modification instructions
+- Adding more sub-agents walkthrough
 
 #### Task 6.3: Update Backstage Implementation Plan
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 **Files:** `docs/plans/backstage-deployment-implementation-plan.md`
 
-Add Phase 8 (or extend Phase 7) to the main Backstage plan tracking the template work.
+Added "Related Work" section to the main Backstage deployment plan with cross-references to:
+- CrewAI template implementation plan
+- Template and usage guide file paths
+- First use case status and examples location
+
+**Phase 6 Summary:** All 3 tasks complete. Created comprehensive template usage guide at `docs/guides/crewai-agent-template-guide.md` covering the full workflow from template wizard through K8s deployment. Enhanced the generated README.md with customization sections (knowledge, tools, routing). Updated the main Backstage implementation plan with cross-references. The template is fully documented and ready for use.
 
 ---
 
@@ -562,5 +568,5 @@ Required keys:
 | Phase 3: K8s Manifest Templates | ✅ Complete | 5/5 | 100% |
 | Phase 4: Template Actions | ✅ Complete | 4/4 | 100% |
 | Phase 5: Chores Tracker Agent | 🔄 In Progress | 2/5 | 40% |
-| Phase 6: Documentation | ⬜ Not Started | 0/3 | 0% |
-| **Total** | | **23/28** | **82%** |
+| Phase 6: Documentation | ✅ Complete | 3/3 | 100% |
+| **Total** | | **26/28** | **93%** |

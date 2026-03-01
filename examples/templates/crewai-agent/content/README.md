@@ -67,6 +67,40 @@ K8s manifests are in the `k8s/` directory. To deploy:
 | `anthropic-api-key` | Anthropic API key for CrewAI LLM calls |
 | `api-keys` | Comma-separated API keys for inter-service A2A auth |
 
+## Customizing Your Agent
+
+### Adding Knowledge Sources (RAG)
+
+Place files in `config/knowledge/` to give your agent domain-specific context:
+
+- `.txt` files for architecture docs, runbooks, and guides
+- `.json` files for API specs and structured data
+- `.csv` files for tabular data (service catalogs, metrics)
+- `.pdf` files for design docs and RFCs
+
+Then update `src/${{ values.subAgentName }}/tools.py` to read from these files.
+Rebuild with `docker-compose up --build` to include the new knowledge.
+
+### Customizing Tools
+
+Edit `src/${{ values.subAgentName }}/tools.py` to add domain-specific tools.
+Each tool is a Python function decorated with `@tool` from CrewAI:
+
+```python
+from crewai.tools import tool
+
+@tool("my_custom_tool")
+def my_custom_tool(query: str) -> str:
+    """Description of what this tool does."""
+    # Your implementation here
+    return json.dumps({"result": "..."})
+```
+
+### Modifying Routing Keywords
+
+Edit `src/orchestrator/prompts.py` or update the `ROUTING_KEYWORDS` environment
+variable to change which queries route to your sub-agent.
+
 ## Adding More Sub-Agents
 
 1. Create a new directory under `src/` following the pattern of `src/${{ values.subAgentName }}/`
