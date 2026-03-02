@@ -331,6 +331,7 @@ spec:
           subAgentBackstory: ${{ parameters.subAgentBackstory }}
           domain: ${{ parameters.domain }}
           vaultRole: ${{ parameters.vaultRole }}
+          version: ${{ parameters.version }}
 
     # Step 3 (production): Create ECR repositories for the Docker images.
     # Idempotent — if repos already exist, their URIs are fetched and returned.

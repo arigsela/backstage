@@ -26,7 +26,9 @@ data:
   ORCHESTRATOR_HOST: "0.0.0.0"
   # Must match the containerPort in deployment.yaml
   ORCHESTRATOR_PORT: "${{ values.orchestratorPort }}"
-  # CORS: allow all origins for development; restrict in production
+  # CORS: allow all origins by default. For production, restrict to your
+  # specific domain (e.g. "https://${{ values.domain }}") to prevent
+  # unauthorized cross-origin requests.
   CORS_ORIGINS: "*"
   # Internal service DNS name for the sub-agent
   # Format: http://<service-name>.<namespace>.svc:<port>

@@ -36,8 +36,10 @@ spec:
     spec:
       # Dedicated ServiceAccount for this sub-agent
       serviceAccountName: ${{ values.name }}-${{ values.subAgentName }}
+      # Disable automatic SA token mount — this pod doesn't need K8s API access
+      automountServiceAccountToken: false
       imagePullSecrets:
-      - name: ecr-registry
+        - name: ecr-registry
       nodeSelector:
         node.kubernetes.io/workload: application
       securityContext:
@@ -46,61 +48,65 @@ spec:
         runAsGroup: 1000
 
       containers:
-      - name: agent
-        # ECR image — built by deploy-to-ecr.sh
-        image: 852893458518.dkr.ecr.us-east-2.amazonaws.com/${{ values.name }}-${{ values.subAgentName }}:latest
-        imagePullPolicy: Always
+        - name: agent
+          # ECR image — built by deploy-to-ecr.sh, pinned to scaffolded version
+          image: 852893458518.dkr.ecr.us-east-2.amazonaws.com/${{ values.name }}-${{ values.subAgentName }}:${{ values.version }}
+          imagePullPolicy: Always
 
-        ports:
-        - name: http
-          containerPort: ${{ values.subAgentPort }}
-          protocol: TCP
+          # Container-level security hardening
+          securityContext:
+            allowPrivilegeEscalation: false
 
-        # Non-sensitive config from ConfigMap
-        envFrom:
-        - configMapRef:
-            name: ${{ values.subAgentName }}-config
+          ports:
+            - name: http
+              containerPort: ${{ values.subAgentPort }}
+              protocol: TCP
 
-        # Sensitive values from Vault via ExternalSecrets
-        env:
-        - name: HOME
-          value: /tmp
-        - name: ANTHROPIC_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: ${{ values.subAgentName }}-secrets
-              key: anthropic-api-key
-        - name: API_KEYS
-          valueFrom:
-            secretKeyRef:
-              name: ${{ values.subAgentName }}-secrets
-              key: api-keys
+          # Non-sensitive config from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: ${{ values.subAgentName }}-config
 
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
+          # Sensitive values from Vault via ExternalSecrets
+          env:
+            - name: HOME
+              value: /tmp
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${{ values.subAgentName }}-secrets
+                  key: anthropic-api-key
+            - name: API_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: ${{ values.subAgentName }}-secrets
+                  key: api-keys
 
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: ${{ values.subAgentPort }}
-          initialDelaySeconds: 30
-          periodSeconds: 30
-          timeoutSeconds: 10
-          failureThreshold: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
 
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: ${{ values.subAgentPort }}
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: ${{ values.subAgentPort }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: ${{ values.subAgentPort }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
 
       terminationGracePeriodSeconds: 30
 
@@ -119,6 +125,7 @@ metadata:
   labels:
     app: ${{ values.name }}-${{ values.subAgentName }}
     component: rbac
+automountServiceAccountToken: false
 
 ---
 # ------------------------------------------------------------------------------
@@ -139,9 +146,9 @@ spec:
   selector:
     app: ${{ values.name }}-${{ values.subAgentName }}
   ports:
-  - name: http
-    # Sub-agent service listens on the configured port directly
-    # (unlike the orchestrator which maps 80 -> containerPort)
-    port: ${{ values.subAgentPort }}
-    targetPort: ${{ values.subAgentPort }}
-    protocol: TCP
+    - name: http
+      # Sub-agent service listens on the configured port directly
+      # (unlike the orchestrator which maps 80 -> containerPort)
+      port: ${{ values.subAgentPort }}
+      targetPort: ${{ values.subAgentPort }}
+      protocol: TCP

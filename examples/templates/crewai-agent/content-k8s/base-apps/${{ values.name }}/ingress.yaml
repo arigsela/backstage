@@ -58,19 +58,19 @@ spec:
   # Use the nginx ingress class (installed cluster-wide)
   ingressClassName: nginx
   tls:
-  - hosts:
-    - ${{ values.domain }}
-    # cert-manager creates this Secret automatically with the TLS cert
-    secretName: ${{ values.name }}-tls
+    - hosts:
+        - ${{ values.domain }}
+      # cert-manager creates this Secret automatically with the TLS cert
+      secretName: ${{ values.name }}-tls
   rules:
-  - host: ${{ values.domain }}
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            # Route to the orchestrator's ClusterIP Service
-            name: ${{ values.name }}-orchestrator
-            port:
-              number: 80
+    - host: ${{ values.domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                # Route to the orchestrator's ClusterIP Service
+                name: ${{ values.name }}-orchestrator
+                port:
+                  number: 80
