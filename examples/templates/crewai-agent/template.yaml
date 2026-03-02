@@ -12,9 +12,9 @@
 # 3. OUTPUT — define what links to show the user when done
 #
 # TEMPLATE ENGINE:
-# Content files in ./content/ use Nunjucks templating. Any file can contain
-# ${{ values.someParam }} which gets replaced with the user's input.
-# Python code with { } (dicts, f-strings) MUST be wrapped in
+# Content files in ./content-agent/ and ./content-k8s/ use Nunjucks templating.
+# Any file can contain ${{ values.someParam }} which gets replaced with the
+# user's input. Python code with { } (dicts, f-strings) MUST be wrapped in
 # {% raw %}...{% endraw %} blocks to avoid Nunjucks conflicts.
 #
 # REFERENCE:
@@ -29,8 +29,8 @@ metadata:
   title: CrewAI Multi-Agent Project
   description: >-
     Scaffold a new CrewAI multi-agent project with an orchestrator and
-    configurable sub-agents. Generates Python source code, Dockerfiles,
-    Kubernetes manifests, and a catalog-info.yaml for auto-registration.
+    configurable sub-agents. Creates two PRs: one for agent code in the
+    claude-agents monorepo, and one for K8s manifests in the kubernetes GitOps repo.
   tags:
     - crewai
     - ai-agent
@@ -76,7 +76,8 @@ spec:
           type: string
           description: >-
             Unique name for the agent project (lowercase, hyphens allowed).
-            This becomes the GitHub repo name, K8s namespace, and Backstage entity name.
+            This becomes the directory name in the claude-agents monorepo
+            and Backstage entity name.
           pattern: '^[a-z][a-z0-9-]*$'
           # ui:autofocus makes the browser focus this field when the page loads
           ui:autofocus: true
@@ -179,6 +180,21 @@ spec:
             Example: Answer questions about the Chores Tracker app architecture,
             API, deployment, and troubleshooting using knowledge sources and tools.
 
+        subAgentBackstory:
+          title: CrewAI Backstory (Prompt)
+          type: string
+          description: >-
+            The agent's backstory — this is the main prompt that tells the LLM
+            how to behave. Include domain expertise, constraints, output format
+            preferences, and tool usage guidelines.
+          ui:widget: textarea
+          ui:options:
+            rows: 8
+          ui:help: >-
+            Example: You are an expert on the Chores Tracker application. You know
+            its FastAPI backend, React frontend, PostgreSQL database, and K8s deployment.
+            Always cite specific files or commands. Never fabricate information.
+
         subAgentPort:
           title: Sub-Agent Port
           type: integer
@@ -199,23 +215,29 @@ spec:
           default: true
 
     # --- WIZARD PAGE 4: Infrastructure ---
-    # Where to create the repo and how to deploy.
+    # Deployment configuration and dry-run toggle.
+    # Agent code PRs to arigsela/claude-agents, K8s manifests PR to arigsela/kubernetes.
     - title: Infrastructure
-      description: GitHub repository and deployment configuration.
-      required:
-        - repoUrl
+      description: >-
+        Deployment configuration. The template creates two PRs: agent code to the
+        claude-agents monorepo and K8s manifests to the kubernetes GitOps repo.
       properties:
-        repoUrl:
-          title: Repository Location
+        dryRun:
+          title: Dry Run (Testing Mode)
+          type: boolean
+          description: >-
+            When enabled, writes output to /tmp instead of creating GitHub PRs.
+            Disable this when you're ready to create real PRs.
+          default: true
+
+        version:
+          title: Initial Image Version
           type: string
-          # RepoUrlPicker is a special Backstage widget that handles
-          # org/repo selection and produces a URL the publish action understands
-          ui:field: RepoUrlPicker
-          ui:options:
-            allowedHosts:
-              - github.com
-            allowedOwners:
-              - arigsela
+          description: >-
+            Version tag for the initial Docker images pushed to ECR.
+            Subsequent versions are managed via the deploy-to-ecr.sh script.
+          default: '1.0.0'
+          ui:help: 'Semantic version for the first image build (e.g. 1.0.0)'
 
         domain:
           title: Ingress Domain (optional)
@@ -224,6 +246,17 @@ spec:
             Subdomain for the nginx ingress. Leave empty to skip ingress generation.
             TLS is auto-configured via cert-manager letsencrypt-prod.
           ui:help: 'Example: chores-agent.arigsela.com'
+
+        namespace:
+          title: Kubernetes Namespace
+          type: string
+          description: >-
+            K8s namespace to deploy into. Defaults to 'oncall-crewai' which
+            already has ECR image pull secrets synced. Only change this if you
+            need a dedicated namespace (and remember to add it to the ECR auth
+            CronJob in base-apps/ecr-auth/cronjobs.yaml).
+          default: oncall-crewai
+          ui:help: 'Default: oncall-crewai (already has ECR auth configured)'
 
         vaultRole:
           title: Vault Role
@@ -240,24 +273,27 @@ spec:
   # provided by a scaffolder module. Later steps can reference outputs from
   # earlier steps via ${{ steps['stepId'].output.fieldName }}.
   #
-  # TESTING MODE:
-  # During development, we use publish:file to write output locally instead of
-  # creating a real GitHub repo. Swap to publish:github when ready for production.
+  # DUAL-REPO WORKFLOW:
+  # 1. Render agent code from ./content-agent/ → workspace agent-code/
+  # 2. Render K8s manifests from ./content-k8s/ → workspace k8s-manifests/
+  # 3. PR agent code to arigsela/claude-agents (production) OR write to /tmp (dry run)
+  # 4. PR K8s manifests to arigsela/kubernetes (production) OR write to /tmp (dry run)
   # ============================================================================
 
   steps:
-    # Step 1: Copy and template all files from ./content/ into a working directory.
-    # Every file is processed through Nunjucks — ${{ values.name }} gets replaced
-    # with the user's input. The `values` map explicitly passes each parameter.
-    - id: fetch-base
-      name: Fetch Agent Project Skeleton
+    # Step 1: Render agent code (Python source, Dockerfiles, tests, etc.)
+    # from ./content-agent/ into the workspace under agent-code/ subdirectory.
+    - id: fetch-agent-code
+      name: Render Agent Code
       action: fetch:template
       input:
-        url: ./content
+        url: ./content-agent
+        targetPath: agent-code
         values:
           name: ${{ parameters.name }}
           description: ${{ parameters.description }}
           owner: ${{ parameters.owner }}
+          namespace: ${{ parameters.namespace }}
           orchestratorPort: ${{ parameters.orchestratorPort }}
           routingKeywords: ${{ parameters.routingKeywords }}
           subAgentName: ${{ parameters.subAgentName }}
@@ -266,69 +302,132 @@ spec:
           subAgentGoal: ${{ parameters.subAgentGoal }}
           subAgentPort: ${{ parameters.subAgentPort }}
           enableKnowledge: ${{ parameters.enableKnowledge }}
+          subAgentBackstory: ${{ parameters.subAgentBackstory }}
           domain: ${{ parameters.domain }}
           vaultRole: ${{ parameters.vaultRole }}
 
-    # Step 2: Write the rendered files to local filesystem for testing.
-    # IMPORTANT: Swap this to publish:github for production use (see commented block below).
-    - id: publish
-      name: Write to Local Filesystem (Testing Mode)
+    # Step 2: Render K8s manifests (ArgoCD app, deployments, secrets, ingress)
+    # from ./content-k8s/ into the workspace under k8s-manifests/ subdirectory.
+    # The content already has the base-apps/ structure matching the kubernetes repo.
+    - id: fetch-k8s-manifests
+      name: Render K8s Manifests
+      action: fetch:template
+      input:
+        url: ./content-k8s
+        targetPath: k8s-manifests
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          namespace: ${{ parameters.namespace }}
+          orchestratorPort: ${{ parameters.orchestratorPort }}
+          routingKeywords: ${{ parameters.routingKeywords }}
+          subAgentName: ${{ parameters.subAgentName }}
+          subAgentDisplayName: ${{ parameters.subAgentDisplayName }}
+          subAgentRole: ${{ parameters.subAgentRole }}
+          subAgentGoal: ${{ parameters.subAgentGoal }}
+          subAgentPort: ${{ parameters.subAgentPort }}
+          enableKnowledge: ${{ parameters.enableKnowledge }}
+          subAgentBackstory: ${{ parameters.subAgentBackstory }}
+          domain: ${{ parameters.domain }}
+          vaultRole: ${{ parameters.vaultRole }}
+
+    # Step 3 (production): Create ECR repositories for the Docker images.
+    # Idempotent — if repos already exist, their URIs are fetched and returned.
+    # Skipped in dry-run mode since no AWS resources should be created during testing.
+    - id: create-ecr-repos
+      name: Create ECR Repositories
+      if: ${{ not parameters.dryRun }}
+      action: aws:ecr:create
+      input:
+        projectName: ${{ parameters.name }}
+        subAgentName: ${{ parameters.subAgentName }}
+
+    # Step 4 (production): Build Docker images and push to ECR.
+    # Uses docker buildx to cross-compile for linux/amd64 (EKS node architecture).
+    # Requires Docker Desktop (local dev) or DinD sidecar (EKS production).
+    - id: build-push-images
+      name: Build & Push Docker Images
+      if: ${{ not parameters.dryRun }}
+      action: aws:ecr:build-push
+      input:
+        projectName: ${{ parameters.name }}
+        subAgentName: ${{ parameters.subAgentName }}
+        version: ${{ parameters.version }}
+
+    # Step 5 (production): Create PR for agent code in the claude-agents monorepo.
+    # sourcePath selects only the agent-code/ subdirectory from the workspace.
+    # targetPath places it as a new top-level directory in the monorepo (e.g., chores-knowledge-agent/).
+    - id: pr-agent-code
+      name: Create Agent Code PR
+      if: ${{ not parameters.dryRun }}
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=arigsela&repo=claude-agents
+        branchName: scaffolder/add-${{ parameters.name }}
+        title: 'feat: scaffold ${{ parameters.name }} agent'
+        description: |
+          ## New CrewAI Agent: ${{ parameters.name }}
+
+          ${{ parameters.description }}
+
+          Scaffolded by the Backstage CrewAI template.
+
+          ### Automated by scaffolder
+          - ECR repositories created automatically: `${{ parameters.name }}-orchestrator` and `${{ parameters.name }}-${{ parameters.subAgentName }}`
+          - Docker images built and pushed to ECR with tag `${{ parameters.version }}`
+        sourcePath: agent-code
+        targetPath: ${{ parameters.name }}
+
+    # Step 6 (production): Create PR for K8s manifests in the kubernetes GitOps repo.
+    # No targetPath needed — content-k8s/ already contains the base-apps/ structure
+    # that maps directly to the repo layout.
+    - id: pr-k8s-manifests
+      name: Create K8s Manifests PR
+      if: ${{ not parameters.dryRun }}
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=arigsela&repo=kubernetes
+        branchName: scaffolder/add-${{ parameters.name }}-manifests
+        title: 'feat: add ${{ parameters.name }} K8s manifests'
+        description: |
+          ## K8s Manifests for ${{ parameters.name }}
+
+          ArgoCD Application + deployment manifests for the ${{ parameters.name }} agent.
+
+          Scaffolded by the Backstage CrewAI template.
+
+          ### Post-merge steps
+          - Create Vault role `${{ parameters.vaultRole }}` with K8s auth
+          - Add secrets at `k8s-secrets/data/${{ parameters.vaultRole }}`: `anthropic-api-key`, `api-keys`
+        sourcePath: k8s-manifests
+
+    # Step 7 (dry run): Write rendered files to local filesystem for testing.
+    # Both agent-code/ and k8s-manifests/ are written to /tmp for inspection.
+    - id: publish-local
+      name: Write to Local Filesystem (Dry Run)
+      if: ${{ parameters.dryRun }}
       action: publish:file
       input:
         path: /tmp/backstage-scaffolder/${{ parameters.name }}
-
-    # # --- PRODUCTION: Uncomment this block and remove the publish:file step above ---
-    # - id: publish
-    #   name: Create GitHub Repository
-    #   action: publish:github
-    #   input:
-    #     repoUrl: ${{ parameters.repoUrl }}
-    #     description: ${{ parameters.description }}
-    #     defaultBranch: main
-    #     repoVisibility: private
-    #     # protectDefaultBranch: true    # Enable after first deploy
-    #     # collaborators:                # Add team access
-    #     #   - team: platform-engineering
-    #     #     access: maintain
-
-    # # Step 3: Tell the Backstage catalog about the new repo's catalog-info.yaml.
-    # # This only works with publish:github (needs repoContentsUrl output).
-    # - id: register
-    #   name: Register in Backstage Catalog
-    #   action: catalog:register
-    #   input:
-    #     repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
-    #     catalogInfoPath: /catalog-info.yaml
-
-    # # Step 4: Send an in-app notification to the owner.
-    # - id: notify
-    #   name: Notify Creator
-    #   action: notification:send
-    #   input:
-    #     recipients: entity
-    #     entityRefs:
-    #       - ${{ parameters.owner }}
-    #     title: 'CrewAI Agent "${{ parameters.name }}" created'
-    #     info: >-
-    #       Your agent project has been scaffolded and published to GitHub.
-    #       Check the repo README for next steps (build images, configure Vault, deploy).
-    #     severity: normal
 
   # ============================================================================
   # OUTPUT — Links Shown After Completion
   # ============================================================================
   # These appear as clickable buttons/links on the success page.
-  # In testing mode with publish:file, we show the local path.
-  # With publish:github, we'd show the repo URL and catalog entity link.
+  # In production mode, shows links to both PRs.
+  # In dry run mode, shows the local filesystem path.
   # ============================================================================
 
   output:
     links:
-      - title: Scaffolded Output
+      - title: Agent Code PR
+        url: ${{ steps['pr-agent-code'].output.remoteUrl }}
+      - title: K8s Manifests PR
+        url: ${{ steps['pr-k8s-manifests'].output.remoteUrl }}
+      - title: ECR — Orchestrator Repo
+        url: ${{ steps['create-ecr-repos'].output.orchestratorConsoleUrl }}
+      - title: ECR — Sub-Agent Repo
+        url: ${{ steps['create-ecr-repos'].output.subAgentConsoleUrl }}
+      - title: Dry Run Output
         url: file:///tmp/backstage-scaffolder/${{ parameters.name }}
-      # # --- PRODUCTION: Uncomment these and remove the line above ---
-      # - title: Repository
-      #   url: ${{ steps['publish'].output.remoteUrl }}
-      # - title: Open in Catalog
-      #   icon: catalog
-      #   entityRef: ${{ steps['register'].output.entityRef }}

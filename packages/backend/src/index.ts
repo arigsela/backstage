@@ -91,6 +91,19 @@ backend.add(
 );
 
 /**
+ * CUSTOM SCAFFOLDER ACTIONS
+ * Registers project-specific scaffolder actions that aren't provided by
+ * official Backstage modules.
+ *
+ * Currently provides:
+ * - publish:file — Writes scaffolded output to the local filesystem (for testing).
+ *   Used by the CrewAI agent template during development instead of publish:github.
+ *
+ * See: packages/backend/src/modules/scaffolder/ for implementation details.
+ */
+backend.add(import('./modules/scaffolder'));
+
+/**
  * TECHDOCS
  * Renders Markdown documentation (via MkDocs) directly in Backstage.
  * Entities with `backstage.io/techdocs-ref` annotation get a "Docs" tab.
