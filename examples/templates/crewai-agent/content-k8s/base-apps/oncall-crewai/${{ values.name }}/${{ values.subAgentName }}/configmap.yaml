@@ -21,3 +21,11 @@ data:
   # URL advertised in the A2A agent card (/.well-known/agent.json)
   # This must be reachable by the orchestrator — using K8s internal DNS
   AGENT_URL: "http://${{ values.name }}-${{ values.subAgentName }}.${{ values.namespace }}.svc:${{ values.subAgentPort }}"
+{%- if values.enableKnowledge %}
+  # --- Knowledge/RAG Configuration ---
+  # Directory containing knowledge files (.txt, .json, .csv, .pdf) for RAG
+  KNOWLEDGE_DIR: "config/knowledge"
+  # Embedder provider and model for vector embeddings (CrewAI RAG)
+  EMBEDDER_PROVIDER: "openai"
+  EMBEDDER_MODEL: "text-embedding-3-small"
+{%- endif %}

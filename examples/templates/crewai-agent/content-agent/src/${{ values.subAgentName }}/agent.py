@@ -32,6 +32,10 @@ from shared.observability import (
     log_token_usage,
 )
 from shared.logging_config import setup_logging
+{% endraw %}{% if values.enableKnowledge %}{% raw %}
+# Knowledge/RAG — auto-discovers files in config/knowledge/ and embeds them
+from shared.knowledge import load_knowledge_sources, get_embedder_config
+{% endraw %}{% endif %}{% raw %}
 
 # Import the agent's tools — each @tool-decorated function becomes available
 from {% endraw %}${{ values.subAgentName }}{% raw %}.tools import search_knowledge, get_system_info, check_health
@@ -56,6 +60,14 @@ def create_agent() -> Agent:
     # The agent decides which tools to call based on the query and tool descriptions.
     tools = [search_knowledge, get_system_info, check_health]
 
+{% endraw %}{% if values.enableKnowledge %}{% raw %}
+    # Load knowledge sources from config/knowledge/ for RAG
+    # CrewAI will automatically chunk, embed, and index these files.
+    # The agent's context is enriched with relevant chunks during execution.
+    knowledge_sources = load_knowledge_sources()
+    embedder = get_embedder_config()
+{% endraw %}{% endif %}{% raw %}
+
     agent = Agent(
         role=AGENT_ROLE,
         goal=AGENT_GOAL,
@@ -72,6 +84,14 @@ def create_agent() -> Agent:
         max_execution_time=300,     # 5-minute timeout per invocation
         max_rpm=30,                 # Max 30 LLM calls per minute (cost control)
         max_iter=25,                # Max 25 tool-call iterations
+{% endraw %}{% if values.enableKnowledge %}{% raw %}
+
+        # --- KNOWLEDGE / RAG ---
+        # Pass discovered knowledge sources and embedder config to enable RAG.
+        # CrewAI enriches the agent's context with relevant chunks from these files.
+        knowledge_sources=knowledge_sources if knowledge_sources else None,
+        embedder=embedder,
+{% endraw %}{% endif %}{% raw %}
 
         # --- STRUCTURED OUTPUT ---
         # Uncomment these to enable structured Pydantic output with guardrails.

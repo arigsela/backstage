@@ -81,6 +81,14 @@ spec:
                 secretKeyRef:
                   name: ${{ values.subAgentName }}-secrets
                   key: api-keys
+{%- if values.enableKnowledge %}
+            # OpenAI API key for embeddings (CrewAI RAG requires an embeddings provider)
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${{ values.subAgentName }}-secrets
+                  key: openai-api-key
+{%- endif %}
 
           resources:
             requests:

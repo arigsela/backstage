@@ -27,6 +27,8 @@
 # ==============================================================================
 {% raw %}
 import json
+import os
+from pathlib import Path
 from crewai import tool
 
 from shared.logging_config import setup_logging
@@ -39,6 +41,10 @@ def search_knowledge(query: str) -> str:
     """
     Search the knowledge base for information related to the query.
 
+    Performs keyword-based search across .txt and .json files in the knowledge
+    directory. This complements CrewAI's built-in RAG (which uses vector
+    similarity) by providing direct keyword matching for precise lookups.
+
     Use this tool when you need to find specific information about the system,
     its architecture, configuration, APIs, or troubleshooting procedures.
 
@@ -46,25 +52,78 @@ def search_knowledge(query: str) -> str:
         query: The search query describing what information you need.
 
     Returns:
-        Relevant information from the knowledge base, or a message if nothing was found.
+        Matching excerpts from knowledge files, or a message if nothing was found.
     """
     logger.info(f"Searching knowledge base for: {query[:100]}")
 
-    # TODO: Implement actual knowledge search.
-    # Options:
-    # 1. CrewAI Knowledge sources (built-in RAG)
-    # 2. File-based search through config/knowledge/ files
-    # 3. External vector DB (Chroma, Pinecone, etc.)
-    #
-    # For now, return a placeholder that explains what to implement.
+    knowledge_dir = Path(os.environ.get("KNOWLEDGE_DIR", "config/knowledge"))
+
+    if not knowledge_dir.exists():
+        return json.dumps({
+            "status": "no_knowledge_dir",
+            "query": query,
+            "message": (
+                f"Knowledge directory '{knowledge_dir}' not found. "
+                "Add .txt or .json files to this directory to enable search."
+            ),
+        })
+
+    # Collect searchable files (.txt and .json — these are readable as text)
+    searchable_files = sorted(
+        f for f in knowledge_dir.iterdir()
+        if f.is_file() and f.suffix.lower() in {".txt", ".json"}
+    )
+
+    if not searchable_files:
+        return json.dumps({
+            "status": "no_files",
+            "query": query,
+            "message": (
+                f"No .txt or .json files found in '{knowledge_dir}'. "
+                "Add knowledge files and rebuild to enable search."
+            ),
+        })
+
+    # Case-insensitive keyword search across all files
+    query_lower = query.lower()
+    keywords = query_lower.split()
+    matches = []
+
+    for file_path in searchable_files:
+        try:
+            content = file_path.read_text(encoding="utf-8")
+            content_lower = content.lower()
+
+            # Check if any keyword appears in the file
+            if any(kw in content_lower for kw in keywords):
+                # Extract matching lines for context
+                matching_lines = [
+                    line.strip()
+                    for line in content.splitlines()
+                    if any(kw in line.lower() for kw in keywords)
+                ]
+                # Limit to first 10 matching lines per file
+                excerpt = "\n".join(matching_lines[:10])
+                matches.append({
+                    "file": file_path.name,
+                    "excerpt": excerpt,
+                    "total_matches": len(matching_lines),
+                })
+        except Exception as e:
+            logger.warning(f"Error reading {file_path}: {e}")
+
+    if not matches:
+        return json.dumps({
+            "status": "no_matches",
+            "query": query,
+            "message": f"No matches found for '{query}' across {len(searchable_files)} file(s).",
+        })
+
     return json.dumps({
-        "status": "placeholder",
+        "status": "found",
         "query": query,
-        "message": (
-            "Knowledge search not yet implemented. "
-            "Add your knowledge sources to config/knowledge/ and implement "
-            "the search logic in this function. See the README for details."
-        ),
+        "result_count": len(matches),
+        "results": matches,
     })
 
 

@@ -8,3 +8,4 @@
 #   logging_config.py  - Structured logging setup (text for dev, JSON for K8s)
 #   models.py          - Pydantic output models and guardrail validators
 #   observability.py   - Callbacks for monitoring agent execution
+#   knowledge.py       - Knowledge source auto-discovery and embedder config

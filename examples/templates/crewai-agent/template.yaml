@@ -276,6 +276,8 @@ spec:
   # DUAL-REPO WORKFLOW:
   # 1. Render agent code from ./content-agent/ → workspace agent-code/
   # 2. Render K8s manifests from ./content-k8s/ → workspace k8s-manifests/
+  #    (manifests go into base-apps/oncall-crewai/{name}/ — managed by the
+  #    existing oncall-crewai ArgoCD Application, no separate app created)
   # 3. PR agent code to arigsela/claude-agents (production) OR write to /tmp (dry run)
   # 4. PR K8s manifests to arigsela/kubernetes (production) OR write to /tmp (dry run)
   # ============================================================================
@@ -304,11 +306,12 @@ spec:
           enableKnowledge: ${{ parameters.enableKnowledge }}
           subAgentBackstory: ${{ parameters.subAgentBackstory }}
           domain: ${{ parameters.domain }}
-          vaultRole: ${{ parameters.vaultRole }}
+          vaultRole: ${{ parameters.vaultRole if parameters.vaultRole else parameters.name }}
 
-    # Step 2: Render K8s manifests (ArgoCD app, deployments, secrets, ingress)
-    # from ./content-k8s/ into the workspace under k8s-manifests/ subdirectory.
-    # The content already has the base-apps/ structure matching the kubernetes repo.
+    # Step 2: Render K8s manifests (deployments, secrets, ingress) into the
+    # workspace under k8s-manifests/. Files land inside base-apps/oncall-crewai/
+    # so they're managed by the existing oncall-crewai ArgoCD Application — no
+    # separate ArgoCD app is created.
     - id: fetch-k8s-manifests
       name: Render K8s Manifests
       action: fetch:template
@@ -330,7 +333,7 @@ spec:
           enableKnowledge: ${{ parameters.enableKnowledge }}
           subAgentBackstory: ${{ parameters.subAgentBackstory }}
           domain: ${{ parameters.domain }}
-          vaultRole: ${{ parameters.vaultRole }}
+          vaultRole: ${{ parameters.vaultRole if parameters.vaultRole else parameters.name }}
           version: ${{ parameters.version }}
 
     # Step 3 (production): Create ECR repositories for the Docker images.
@@ -344,7 +347,19 @@ spec:
         projectName: ${{ parameters.name }}
         subAgentName: ${{ parameters.subAgentName }}
 
-    # Step 4 (production): Build Docker images and push to ECR.
+    # Step 4 (production): Provision Vault resources (policy, role, placeholder secrets).
+    # This eliminates the manual post-merge Vault setup. Safe to run multiple times
+    # (idempotent — all Vault API calls are create-or-update).
+    - id: vault-setup
+      name: Setup Vault (Policy + Role + Secrets)
+      if: ${{ not parameters.dryRun }}
+      action: vault:setup
+      input:
+        vaultRole: ${{ parameters.vaultRole if parameters.vaultRole else parameters.name }}
+        namespace: ${{ parameters.namespace }}
+        enableKnowledge: ${{ parameters.enableKnowledge }}
+
+    # Step 5 (production): Build Docker images and push to ECR.
     # Uses docker buildx to cross-compile for linux/amd64 (EKS node architecture).
     # Requires Docker Desktop (local dev) or DinD sidecar (EKS production).
     - id: build-push-images
@@ -356,7 +371,7 @@ spec:
         subAgentName: ${{ parameters.subAgentName }}
         version: ${{ parameters.version }}
 
-    # Step 5 (production): Create PR for agent code in the claude-agents monorepo.
+    # Step 6 (production): Create PR for agent code in the claude-agents monorepo.
     # sourcePath selects only the agent-code/ subdirectory from the workspace.
     # targetPath places it as a new top-level directory in the monorepo (e.g., chores-knowledge-agent/).
     - id: pr-agent-code
@@ -380,9 +395,9 @@ spec:
         sourcePath: agent-code
         targetPath: ${{ parameters.name }}
 
-    # Step 6 (production): Create PR for K8s manifests in the kubernetes GitOps repo.
-    # No targetPath needed — content-k8s/ already contains the base-apps/ structure
-    # that maps directly to the repo layout.
+    # Step 7 (production): Create PR for K8s manifests in the kubernetes GitOps repo.
+    # Manifests land inside base-apps/oncall-crewai/{name}/ so they're synced by
+    # the existing oncall-crewai ArgoCD Application. No separate ArgoCD app created.
     - id: pr-k8s-manifests
       name: Create K8s Manifests PR
       if: ${{ not parameters.dryRun }}
@@ -394,16 +409,18 @@ spec:
         description: |
           ## K8s Manifests for ${{ parameters.name }}
 
-          ArgoCD Application + deployment manifests for the ${{ parameters.name }} agent.
+          Deployment manifests for the ${{ parameters.name }} agent, placed inside
+          `base-apps/oncall-crewai/${{ parameters.name }}/` so they're managed by the
+          existing **oncall-crewai** ArgoCD Application. No separate ArgoCD app is created.
 
           Scaffolded by the Backstage CrewAI template.
 
-          ### Post-merge steps
-          - Create Vault role `${{ parameters.vaultRole }}` with K8s auth
-          - Add secrets at `k8s-secrets/data/${{ parameters.vaultRole }}`: `anthropic-api-key`, `api-keys`
+          ### Vault (automated by scaffolder)
+          - Policy, K8s auth role, and placeholder secrets were created automatically
+          - **Post-merge**: replace placeholder secrets with real values at `k8s-secrets/data/${{ parameters.vaultRole if parameters.vaultRole else parameters.name }}`
         sourcePath: k8s-manifests
 
-    # Step 7 (dry run): Write rendered files to local filesystem for testing.
+    # Step 8 (dry run): Write rendered files to local filesystem for testing.
     # Both agent-code/ and k8s-manifests/ are written to /tmp for inspection.
     - id: publish-local
       name: Write to Local Filesystem (Dry Run)

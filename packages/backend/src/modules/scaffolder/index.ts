@@ -16,6 +16,7 @@
  * - publish:file — Writes template output to local filesystem (for testing)
  * - aws:ecr:create — Creates ECR repositories for orchestrator + sub-agent images
  * - aws:ecr:build-push — Builds Docker images and pushes them to ECR
+ * - vault:setup — Creates Vault policy, K8s auth role, and placeholder secrets
  */
 
 import { createBackendModule } from '@backstage/backend-plugin-api';
@@ -23,6 +24,7 @@ import { scaffolderActionsExtensionPoint } from '@backstage/plugin-scaffolder-no
 import { createPublishFileAction } from './publishFileAction';
 import { createEcrCreateAction } from './ecrCreateAction';
 import { createEcrBuildPushAction } from './ecrBuildPushAction';
+import { createVaultSetupAction } from './vaultSetupAction';
 
 /**
  * Backend module that adds custom scaffolder actions.
@@ -49,6 +51,7 @@ const scaffolderCustomActionsModule = createBackendModule({
           createPublishFileAction(),
           createEcrCreateAction(),
           createEcrBuildPushAction(),
+          createVaultSetupAction(),
         );
       },
     });

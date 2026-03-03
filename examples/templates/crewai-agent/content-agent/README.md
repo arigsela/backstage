@@ -54,15 +54,18 @@ pytest tests/ -v
 ### Kubernetes Deployment
 
 K8s manifests are managed in the [arigsela/kubernetes](https://github.com/arigsela/kubernetes)
-GitOps repo. The Backstage template creates a PR there automatically.
+GitOps repo under `base-apps/oncall-crewai/${{ values.name }}/`. The Backstage
+template creates a PR there automatically. Resources are synced by the existing
+**oncall-crewai** ArgoCD Application — no separate ArgoCD app is created.
 
 **Automated by the Backstage scaffolder:**
 - ECR repositories (`${{ values.name }}-orchestrator` and `${{ values.name }}-${{ values.subAgentName }}`) are created automatically
 - Docker images are built and pushed to ECR during scaffolding
+- Vault policy, K8s auth role, and placeholder secrets are provisioned automatically
 
 **Post-merge steps** (after the K8s PR is merged):
 
-1. Create Vault role and secrets at path `k8s-secrets/data/${{ values.vaultRole }}`
+1. Replace placeholder Vault secrets with real values at path `k8s-secrets/data/${{ values.vaultRole }}`
 2. ArgoCD will auto-deploy once manifests are in the `main` branch
 
 ### Required Vault Secrets
@@ -71,6 +74,9 @@ GitOps repo. The Backstage template creates a PR there automatically.
 |-----|-------------|
 | `anthropic-api-key` | Anthropic API key for CrewAI LLM calls |
 | `api-keys` | Comma-separated API keys for inter-service A2A auth |
+{%- if values.enableKnowledge %}
+| `openai-api-key` | OpenAI API key for RAG vector embeddings |
+{%- endif %}
 
 ## Customizing Your Agent
 
@@ -83,8 +89,35 @@ Place files in `config/knowledge/` to give your agent domain-specific context:
 - `.csv` files for tabular data (service catalogs, metrics)
 - `.pdf` files for design docs and RFCs
 
-Then update `src/${{ values.subAgentName }}/tools.py` to read from these files.
-Rebuild with `docker-compose up --build` to include the new knowledge.
+{% if values.enableKnowledge %}
+**RAG is enabled.** Knowledge files are automatically discovered, chunked, and
+embedded at startup using CrewAI's built-in RAG system. The agent's context is
+enriched with relevant chunks during execution — no code changes needed.
+
+**Requirements:**
+- Set `OPENAI_API_KEY` in your `.env` file (or Vault for production)
+- OpenAI embeddings are used because Anthropic does not provide an embeddings API
+- The `search_knowledge` tool also provides keyword-based file search as a complement to RAG
+
+**How it works:**
+1. `src/shared/knowledge.py` scans `config/knowledge/` for supported files
+2. Files are wrapped in CrewAI `KnowledgeSource` objects (TextFile, JSON, CSV, PDF)
+3. `agent.py` passes these to `Agent(knowledge_sources=..., embedder=...)`
+4. CrewAI chunks, embeds, and indexes the content automatically
+5. During execution, relevant chunks are injected into the agent's context
+{% else %}
+**RAG is disabled.** The `search_knowledge` tool performs keyword-based file search
+against `.txt` and `.json` files in `config/knowledge/`. This is useful but does
+not include vector-based semantic search.
+
+To enable full RAG with vector embeddings, re-scaffold this project with
+`enableKnowledge: true` in the Backstage template. This will:
+- Auto-discover and embed knowledge files using CrewAI's RAG system
+- Add OpenAI embeddings configuration (required since Anthropic has no embeddings API)
+- Add `OPENAI_API_KEY` to the K8s secrets and docker-compose environment
+{% endif %}
+
+Rebuild with `docker-compose up --build` to include new knowledge files.
 
 ### Customizing Tools
 
@@ -110,7 +143,7 @@ variable to change which queries route to your sub-agent.
 
 1. Create a new directory under `src/` following the pattern of `src/${{ values.subAgentName }}/`
 2. Add a Dockerfile in `docker/`
-3. Add K8s manifests in the [arigsela/kubernetes](https://github.com/arigsela/kubernetes) repo under `base-apps/${{ values.name }}/`
+3. Add K8s manifests in the [arigsela/kubernetes](https://github.com/arigsela/kubernetes) repo under `base-apps/oncall-crewai/${{ values.name }}/`
 4. Update the orchestrator's routing keywords and agent factories in `src/orchestrator/`
 
 ## Project Structure

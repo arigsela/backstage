@@ -80,12 +80,12 @@ spec:
             - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: orchestrator-secrets
+                  name: ${{ values.name }}-orchestrator-secrets
                   key: anthropic-api-key
             - name: API_KEYS
               valueFrom:
                 secretKeyRef:
-                  name: orchestrator-secrets
+                  name: ${{ values.name }}-orchestrator-secrets
                   key: api-keys
 
           # Mount persistent storage for session data / CrewAI memory

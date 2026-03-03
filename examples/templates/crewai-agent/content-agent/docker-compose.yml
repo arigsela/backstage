@@ -54,4 +54,11 @@ services:
       - API_KEYS=${API_KEYS:-}
       - LOG_FORMAT=text
       - LOG_LEVEL=INFO
+{%- if values.enableKnowledge %}
+      # --- Knowledge/RAG ---
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - KNOWLEDGE_DIR=config/knowledge
+      - EMBEDDER_PROVIDER=openai
+      - EMBEDDER_MODEL=text-embedding-3-small
+{%- endif %}
     restart: unless-stopped
