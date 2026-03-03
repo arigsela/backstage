@@ -107,22 +107,7 @@ async function ensureEcrRepo(
  *   - subAgentConsoleUrl: AWS Console URL for the sub-agent repo
  */
 export function createEcrCreateAction() {
-  return createTemplateAction<
-    {
-      projectName: string;
-      subAgentName: string;
-      region?: string;
-      registryId?: string;
-    },
-    {
-      orchestratorRepoUri: string;
-      subAgentRepoUri: string;
-      orchestratorRepoName: string;
-      subAgentRepoName: string;
-      orchestratorConsoleUrl: string;
-      subAgentConsoleUrl: string;
-    }
-  >({
+  return createTemplateAction({
     id: 'aws:ecr:create',
     description:
       'Creates ECR repositories for the orchestrator and sub-agent Docker images',

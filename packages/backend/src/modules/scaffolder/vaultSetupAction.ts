@@ -72,19 +72,7 @@ async function vaultRequest(
  *   - secretPath: The Vault KV path where secrets are stored
  */
 export function createVaultSetupAction() {
-  return createTemplateAction<
-    {
-      vaultRole: string;
-      namespace: string;
-      enableKnowledge?: boolean;
-      serviceAccountNames?: string;
-    },
-    {
-      policyName: string;
-      roleName: string;
-      secretPath: string;
-    }
-  >({
+  return createTemplateAction({
     id: 'vault:setup',
     description:
       'Creates a Vault policy, Kubernetes auth role, and placeholder secrets for a new project',

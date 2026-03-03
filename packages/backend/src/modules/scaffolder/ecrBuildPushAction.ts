@@ -123,20 +123,7 @@ async function dockerLogin(
  *   - subAgentImage: Full image URI with version tag
  */
 export function createEcrBuildPushAction() {
-  return createTemplateAction<
-    {
-      projectName: string;
-      subAgentName: string;
-      version?: string;
-      region?: string;
-      registryUrl?: string;
-      agentCodePath?: string;
-    },
-    {
-      orchestratorImage: string;
-      subAgentImage: string;
-    }
-  >({
+  return createTemplateAction({
     id: 'aws:ecr:build-push',
     description:
       'Builds Docker images for orchestrator and sub-agent, then pushes to ECR',

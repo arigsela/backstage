@@ -42,10 +42,7 @@ import { mkdir, cp } from 'node:fs/promises';
  *   - outputPath: The absolute filesystem path (for downstream steps)
  */
 export function createPublishFileAction() {
-  return createTemplateAction<
-    { path: string },
-    { resultsUrl: string; outputPath: string }
-  >({
+  return createTemplateAction({
     id: 'publish:file',
     description:
       'Writes the scaffolded output to a local filesystem path (for testing)',
