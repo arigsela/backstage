@@ -19,15 +19,20 @@
 # enabling progress tracking for long-running agent tasks.
 # ==============================================================================
 {% raw %}
+import uuid
+
 from a2a.server.agent_execution import AgentExecutor
-from a2a.server.events import EventQueue
+from a2a.server.agent_execution.context import RequestContext
+from a2a.server.events.event_queue import EventQueue
 from a2a.types import (
+    Artifact,
+    Message,
+    Part,
+    Role,
+    TaskArtifactUpdateEvent,
     TaskState,
     TaskStatus,
     TaskStatusUpdateEvent,
-    TaskArtifactUpdateEvent,
-    Artifact,
-    Part,
     TextPart,
 )
 
@@ -77,7 +82,11 @@ class SubAgentExecutor(AgentExecutor):
     5. Emits a "completed" status event
     """
 
-    async def execute(self, context, event_queue: EventQueue):
+    async def execute(
+        self,
+        context: RequestContext,
+        event_queue: EventQueue,
+    ) -> None:
         """
         Process an incoming A2A request.
 
@@ -85,9 +94,12 @@ class SubAgentExecutor(AgentExecutor):
             context: A2A execution context with the incoming message and task info.
             event_queue: Queue to emit A2A events (status updates, artifacts).
         """
+        task_id = context.task_id
+        context_id = context.context_id
+
         # Extract the query text from the A2A message
         query = extract_user_input(
-            context.get_user_message(),
+            context.message,
             default="No query provided"
         )
         logger.info(f"Received A2A request: {query[:100]}")
@@ -95,7 +107,17 @@ class SubAgentExecutor(AgentExecutor):
         # Emit "working" status — tells the orchestrator we're processing
         await event_queue.enqueue_event(
             TaskStatusUpdateEvent(
-                status=TaskStatus(state=TaskState.working),
+                task_id=task_id,
+                context_id=context_id,
+                final=False,
+                status=TaskStatus(
+                    state=TaskState.working,
+                    message=Message(
+                        role=Role.agent,
+                        message_id=str(uuid.uuid4()),
+                        parts=[TextPart(text="Processing your request...")],
+                    ),
+                ),
             )
         )
 
@@ -107,7 +129,10 @@ class SubAgentExecutor(AgentExecutor):
             # Emit the result as an A2A artifact
             await event_queue.enqueue_event(
                 TaskArtifactUpdateEvent(
+                    task_id=task_id,
+                    context_id=context_id,
                     artifact=Artifact(
+                        artifact_id=str(uuid.uuid4()),
                         parts=[Part(root=TextPart(text=result))],
                     ),
                 )
@@ -116,19 +141,44 @@ class SubAgentExecutor(AgentExecutor):
             # Emit "completed" status — tells the orchestrator we're done
             await event_queue.enqueue_event(
                 TaskStatusUpdateEvent(
-                    status=TaskStatus(state=TaskState.completed),
+                    task_id=task_id,
+                    context_id=context_id,
+                    final=True,
+                    status=TaskStatus(
+                        state=TaskState.completed,
+                        message=Message(
+                            role=Role.agent,
+                            message_id=str(uuid.uuid4()),
+                            parts=[TextPart(text=result)],
+                        ),
+                    ),
                 )
             )
 
         except Exception as e:
-            logger.error(f"Agent execution failed: {e}")
+            logger.error(f"Agent execution failed: {e}", exc_info=True)
             # Emit "failed" status with error message
             await event_queue.enqueue_event(
                 TaskStatusUpdateEvent(
+                    task_id=task_id,
+                    context_id=context_id,
+                    final=True,
                     status=TaskStatus(
                         state=TaskState.failed,
-                        message=str(e),
+                        message=Message(
+                            role=Role.agent,
+                            message_id=str(uuid.uuid4()),
+                            parts=[TextPart(text=f"Agent error: {e}")],
+                        ),
                     ),
                 )
             )
+
+    async def cancel(
+        self,
+        context: RequestContext,
+        event_queue: EventQueue,
+    ) -> None:
+        """Cancel is not supported for this agent."""
+        raise NotImplementedError("This agent does not support cancellation")
 {% endraw %}

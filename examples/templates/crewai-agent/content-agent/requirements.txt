@@ -21,7 +21,9 @@ fastapi>=0.115.0,<1.0.0
 uvicorn>=0.34.0,<1.0.0
 
 # --- A2A Protocol ---
-a2a-sdk>=0.2.0,<1.0.0
+# Pinned to 0.3.24 — the v0.3.x API uses A2AStarletteApplication,
+# RequestContext, InMemoryTaskStore (different from v0.2.x)
+a2a-sdk==0.3.24
 
 # --- LLM Provider ---
 anthropic>=0.42.0,<1.0.0

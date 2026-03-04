@@ -20,12 +20,13 @@
 #   uvicorn ${{ values.subAgentPythonName }}.server:app --host 0.0.0.0 --port ${{ values.subAgentPort }}
 # ==============================================================================
 {% raw %}
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import os
 
-from a2a.server.apps.fastapi import A2AFastAPIApplication
+from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import AgentCard, AgentSkill, AgentCapabilities
 
 from shared.config import PROJECT_NAME, SUB_AGENT_PORT, API_KEYS
@@ -77,9 +78,14 @@ def create_app() -> FastAPI:
         if not API_KEYS:
             return await call_next(request)
 
-        # Check the X-API-Key header
-        api_key = request.headers.get("X-API-Key", "")
-        if api_key not in API_KEYS:
+        # Check both Authorization: Bearer and X-API-Key headers
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+        else:
+            token = request.headers.get("X-API-Key", "")
+
+        if token not in API_KEYS:
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Invalid or missing API key"},
@@ -93,21 +99,26 @@ def create_app() -> FastAPI:
         return {"status": "healthy", "service": "{% endraw %}${{ values.subAgentPythonName }}{% raw %}"}
 
     # --- MOUNT A2A APPLICATION ---
-    # The A2A SDK provides a FastAPI sub-application that handles:
+    # The A2A SDK provides a Starlette sub-application that handles:
     # - /.well-known/agent.json (agent card / discovery)
     # - POST / (JSON-RPC 2.0 message handling)
     from {% endraw %}${{ values.subAgentPythonName }}{% raw %}.executor import SubAgentExecutor
 
-    a2a_app = A2AFastAPIApplication(
+    task_store = InMemoryTaskStore()
+    handler = DefaultRequestHandler(
+        agent_executor=SubAgentExecutor(),
+        task_store=task_store,
+    )
+
+    a2a_app = A2AStarletteApplication(
         agent_card=AGENT_CARD,
-        http_handler=DefaultRequestHandler(
-            agent_executor=SubAgentExecutor(),
-        ),
+        http_handler=handler,
     )
 
     # Mount the A2A app — this adds the protocol endpoints
     application.mount("/", a2a_app.build())
 
+    logger.info(f"Sub-agent server ready: {AGENT_CARD.url}")
     return application
 
 
