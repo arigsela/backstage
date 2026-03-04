@@ -121,7 +121,7 @@ Rebuild with `docker-compose up --build` to include new knowledge files.
 
 ### Customizing Tools
 
-Edit `src/${{ values.subAgentName }}/tools.py` to add domain-specific tools.
+Edit `src/${{ values.subAgentPythonName }}/tools.py` to add domain-specific tools.
 Each tool is a Python function decorated with `@tool` from CrewAI:
 
 ```python
@@ -141,7 +141,7 @@ variable to change which queries route to your sub-agent.
 
 ## Adding More Sub-Agents
 
-1. Create a new directory under `src/` following the pattern of `src/${{ values.subAgentName }}/`
+1. Create a new directory under `src/` following the pattern of `src/${{ values.subAgentPythonName }}/`
 2. Add a Dockerfile in `docker/`
 3. Add K8s manifests in the [arigsela/kubernetes](https://github.com/arigsela/kubernetes) repo under `base-apps/oncall-crewai/${{ values.name }}/`
 4. Update the orchestrator's routing keywords and agent factories in `src/orchestrator/`

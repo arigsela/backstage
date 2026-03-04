@@ -33,7 +33,7 @@ from a2a.types import (
 
 from shared.logging_config import setup_logging
 
-logger = setup_logging("{% endraw %}${{ values.subAgentName }}{% raw %}.executor")
+logger = setup_logging("{% endraw %}${{ values.subAgentPythonName }}{% raw %}.executor")
 
 
 def extract_user_input(message, default: str = "") -> str:
@@ -101,7 +101,7 @@ class SubAgentExecutor(AgentExecutor):
 
         try:
             # Import and run the CrewAI agent
-            from {% endraw %}${{ values.subAgentName }}{% raw %}.agent import invoke
+            from {% endraw %}${{ values.subAgentPythonName }}{% raw %}.agent import invoke
             result = invoke(query)
 
             # Emit the result as an A2A artifact

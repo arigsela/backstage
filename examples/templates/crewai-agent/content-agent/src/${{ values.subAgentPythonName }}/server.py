@@ -17,7 +17,7 @@
 # - What authentication is required
 #
 # RUNNING THIS SERVICE:
-#   uvicorn ${{ values.subAgentName }}.server:app --host 0.0.0.0 --port ${{ values.subAgentPort }}
+#   uvicorn ${{ values.subAgentPythonName }}.server:app --host 0.0.0.0 --port ${{ values.subAgentPort }}
 # ==============================================================================
 {% raw %}
 from fastapi import FastAPI, Request, Response
@@ -31,7 +31,7 @@ from a2a.types import AgentCard, AgentSkill, AgentCapabilities
 from shared.config import PROJECT_NAME, SUB_AGENT_PORT, API_KEYS
 from shared.logging_config import setup_logging
 
-logger = setup_logging("{% endraw %}${{ values.subAgentName }}{% raw %}.server")
+logger = setup_logging("{% endraw %}${{ values.subAgentPythonName }}{% raw %}.server")
 
 
 # --- A2A AGENT CARD ---
@@ -90,13 +90,13 @@ def create_app() -> FastAPI:
     # --- HEALTH ENDPOINT ---
     @application.get("/health")
     async def health():
-        return {"status": "healthy", "service": "{% endraw %}${{ values.subAgentName }}{% raw %}"}
+        return {"status": "healthy", "service": "{% endraw %}${{ values.subAgentPythonName }}{% raw %}"}
 
     # --- MOUNT A2A APPLICATION ---
     # The A2A SDK provides a FastAPI sub-application that handles:
     # - /.well-known/agent.json (agent card / discovery)
     # - POST / (JSON-RPC 2.0 message handling)
-    from {% endraw %}${{ values.subAgentName }}{% raw %}.executor import SubAgentExecutor
+    from {% endraw %}${{ values.subAgentPythonName }}{% raw %}.executor import SubAgentExecutor
 
     a2a_app = A2AFastAPIApplication(
         agent_card=AGENT_CARD,

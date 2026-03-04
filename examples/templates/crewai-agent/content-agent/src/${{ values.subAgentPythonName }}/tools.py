@@ -33,7 +33,7 @@ from crewai import tool
 
 from shared.logging_config import setup_logging
 
-logger = setup_logging("{% endraw %}${{ values.subAgentName }}{% raw %}.tools")
+logger = setup_logging("{% endraw %}${{ values.subAgentPythonName }}{% raw %}.tools")
 
 
 @tool("search_knowledge")

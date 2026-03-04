@@ -15,8 +15,12 @@
  * REGISTERED ACTIONS:
  * - publish:file — Writes template output to local filesystem (for testing)
  * - aws:ecr:create — Creates ECR repositories for orchestrator + sub-agent images
- * - aws:ecr:build-push — Builds Docker images and pushes them to ECR
+ * - aws:ecr:build-push — Builds Docker images and pushes them to ECR (legacy, kept for compat)
  * - vault:setup — Creates Vault policy, K8s auth role, and placeholder secrets
+ *
+ * NOTE: github:actions:dispatch is provided by the built-in
+ * @backstage/plugin-scaffolder-backend-module-github package — no custom
+ * action needed. It uses the configured GitHub integration credentials.
  */
 
 import { createBackendModule } from '@backstage/backend-plugin-api';
@@ -25,6 +29,7 @@ import { createPublishFileAction } from './publishFileAction';
 import { createEcrCreateAction } from './ecrCreateAction';
 import { createEcrBuildPushAction } from './ecrBuildPushAction';
 import { createVaultSetupAction } from './vaultSetupAction';
+
 
 /**
  * Backend module that adds custom scaffolder actions.

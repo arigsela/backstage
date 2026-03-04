@@ -9,7 +9,7 @@ import pytest
 import json
 from unittest.mock import patch
 
-from {% endraw %}${{ values.subAgentName }}{% raw %}.tools import search_knowledge, get_system_info, check_health
+from {% endraw %}${{ values.subAgentPythonName }}{% raw %}.tools import search_knowledge, get_system_info, check_health
 
 
 class TestTools:
@@ -47,7 +47,7 @@ class TestSubAgentServer:
     def test_health_endpoint(self):
         """The sub-agent should have a working health endpoint."""
         from fastapi.testclient import TestClient
-        from {% endraw %}${{ values.subAgentName }}{% raw %}.server import app
+        from {% endraw %}${{ values.subAgentPythonName }}{% raw %}.server import app
 
         client = TestClient(app)
         response = client.get("/health")
@@ -57,7 +57,7 @@ class TestSubAgentServer:
     def test_auth_middleware_allows_health(self):
         """Health endpoint should be accessible without API key."""
         from fastapi.testclient import TestClient
-        from {% endraw %}${{ values.subAgentName }}{% raw %}.server import app
+        from {% endraw %}${{ values.subAgentPythonName }}{% raw %}.server import app
 
         client = TestClient(app)
         # No API key header — should still work for /health
@@ -70,8 +70,8 @@ class TestAgentCreation:
 
     def test_agent_has_tools(self):
         """The agent should be created with the expected tools."""
-        with patch("{% endraw %}${{ values.subAgentName }}{% raw %}.agent.LLM"):
-            from {% endraw %}${{ values.subAgentName }}{% raw %}.agent import create_agent
+        with patch("{% endraw %}${{ values.subAgentPythonName }}{% raw %}.agent.LLM"):
+            from {% endraw %}${{ values.subAgentPythonName }}{% raw %}.agent import create_agent
             agent = create_agent()
             tool_names = [t.name for t in agent.tools]
             assert "search_knowledge" in tool_names
@@ -80,8 +80,8 @@ class TestAgentCreation:
 
     def test_agent_role_configured(self):
         """The agent should have the configured role."""
-        with patch("{% endraw %}${{ values.subAgentName }}{% raw %}.agent.LLM"):
-            from {% endraw %}${{ values.subAgentName }}{% raw %}.agent import create_agent
+        with patch("{% endraw %}${{ values.subAgentPythonName }}{% raw %}.agent.LLM"):
+            from {% endraw %}${{ values.subAgentPythonName }}{% raw %}.agent import create_agent
             agent = create_agent()
             assert agent.role is not None
             assert len(agent.role) > 0

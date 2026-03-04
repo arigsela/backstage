@@ -38,15 +38,15 @@ from shared.knowledge import load_knowledge_sources, get_embedder_config
 {% endraw %}{% endif %}{% raw %}
 
 # Import the agent's tools — each @tool-decorated function becomes available
-from {% endraw %}${{ values.subAgentName }}{% raw %}.tools import search_knowledge, get_system_info, check_health
-from {% endraw %}${{ values.subAgentName }}{% raw %}.prompts import (
+from {% endraw %}${{ values.subAgentPythonName }}{% raw %}.tools import search_knowledge, get_system_info, check_health
+from {% endraw %}${{ values.subAgentPythonName }}{% raw %}.prompts import (
     AGENT_ROLE,
     AGENT_GOAL,
     AGENT_BACKSTORY,
     TASK_DESCRIPTION_TEMPLATE,
 )
 
-logger = setup_logging("{% endraw %}${{ values.subAgentName }}{% raw %}.agent")
+logger = setup_logging("{% endraw %}${{ values.subAgentPythonName }}{% raw %}.agent")
 
 
 def create_agent() -> Agent:

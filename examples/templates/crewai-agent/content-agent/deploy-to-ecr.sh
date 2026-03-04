@@ -46,7 +46,7 @@ aws ecr get-login-password --region "$REGION" | \
 # Services to build: (image-name dockerfile-path)
 SERVICES=(
     "{% endraw %}${{ values.name }}{% raw %}-orchestrator:docker/Dockerfile.orchestrator"
-    "{% endraw %}${{ values.name }}{% raw %}-{% endraw %}${{ values.subAgentName }}{% raw %}:docker/Dockerfile.{% endraw %}${{ values.subAgentName }}{% raw %}"
+    "{% endraw %}${{ values.name }}{% raw %}-{% endraw %}${{ values.subAgentName }}{% raw %}:docker/Dockerfile.{% endraw %}${{ values.subAgentPythonName }}{% raw %}"
 )
 
 for service_spec in "${SERVICES[@]}"; do

@@ -42,7 +42,7 @@ services:
   ${{ values.subAgentName }}:
     build:
       context: .
-      dockerfile: docker/Dockerfile.${{ values.subAgentName }}
+      dockerfile: docker/Dockerfile.${{ values.subAgentPythonName }}
     ports:
       - "${{ values.subAgentPort }}:${{ values.subAgentPort }}"
     environment:

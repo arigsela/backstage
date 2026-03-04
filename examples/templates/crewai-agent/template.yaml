@@ -299,6 +299,9 @@ spec:
           orchestratorPort: ${{ parameters.orchestratorPort }}
           routingKeywords: ${{ parameters.routingKeywords }}
           subAgentName: ${{ parameters.subAgentName }}
+          # Python-safe version of subAgentName (hyphens → underscores).
+          # Python module/package names cannot contain hyphens.
+          subAgentPythonName: ${{ parameters.subAgentName | replace("-", "_") }}
           subAgentDisplayName: ${{ parameters.subAgentDisplayName }}
           subAgentRole: ${{ parameters.subAgentRole }}
           subAgentGoal: ${{ parameters.subAgentGoal }}
@@ -326,6 +329,7 @@ spec:
           orchestratorPort: ${{ parameters.orchestratorPort }}
           routingKeywords: ${{ parameters.routingKeywords }}
           subAgentName: ${{ parameters.subAgentName }}
+          subAgentPythonName: ${{ parameters.subAgentName | replace("-", "_") }}
           subAgentDisplayName: ${{ parameters.subAgentDisplayName }}
           subAgentRole: ${{ parameters.subAgentRole }}
           subAgentGoal: ${{ parameters.subAgentGoal }}
@@ -359,19 +363,10 @@ spec:
         namespace: ${{ parameters.namespace }}
         enableKnowledge: ${{ parameters.enableKnowledge }}
 
-    # Step 5 (production): Build Docker images and push to ECR.
-    # Uses docker buildx to cross-compile for linux/amd64 (EKS node architecture).
-    # Requires Docker Desktop (local dev) or DinD sidecar (EKS production).
-    - id: build-push-images
-      name: Build & Push Docker Images
-      if: ${{ not parameters.dryRun }}
-      action: aws:ecr:build-push
-      input:
-        projectName: ${{ parameters.name }}
-        subAgentName: ${{ parameters.subAgentName }}
-        version: ${{ parameters.version }}
-
-    # Step 6 (production): Create PR for agent code in the claude-agents monorepo.
+    # Step 5 (production): Create PR for agent code in the claude-agents monorepo.
+    # IMPORTANT: This must happen BEFORE dispatching the build workflow, because
+    # the workflow checks out the PR branch to build the Docker images. The branch
+    # must exist on the remote before workflow_dispatch is called.
     # sourcePath selects only the agent-code/ subdirectory from the workspace.
     # targetPath places it as a new top-level directory in the monorepo (e.g., chores-knowledge-agent/).
     - id: pr-agent-code
@@ -391,9 +386,34 @@ spec:
 
           ### Automated by scaffolder
           - ECR repositories created automatically: `${{ parameters.name }}-orchestrator` and `${{ parameters.name }}-${{ parameters.subAgentName }}`
-          - Docker images built and pushed to ECR with tag `${{ parameters.version }}`
+          - Docker image build triggered via GitHub Actions workflow
         sourcePath: agent-code
         targetPath: ${{ parameters.name }}
+        update: true
+
+    # Step 6 (production): Trigger Docker image build via GitHub Actions.
+    # Replaces the old aws:ecr:build-push action which required Docker-in-Docker
+    # (impossible on EKS with containerd runtime — no Docker daemon in the pod).
+    # Uses the BUILT-IN github:actions:dispatch action from
+    # @backstage/plugin-scaffolder-backend-module-github (uses configured GitHub
+    # integration credentials — no separate GITHUB_TOKEN needed).
+    # The branchOrTagName targets `main` (where the workflow YAML lives),
+    # and the PR branch is passed as a workflow input.
+    # NOTE: This is fire-and-forget — it dispatches the build but does NOT wait
+    # for completion. Check the GitHub Actions tab for build status.
+    - id: dispatch-build
+      name: Trigger Docker Image Build (GitHub Actions)
+      if: ${{ not parameters.dryRun }}
+      action: github:actions:dispatch
+      input:
+        repoUrl: github.com?owner=arigsela&repo=claude-agents
+        workflowId: build-agent-images.yaml
+        branchOrTagName: main
+        workflowInputs:
+          project-name: ${{ parameters.name }}
+          sub-agent-name: ${{ parameters.subAgentName }}
+          version: ${{ parameters.version }}
+          branch: scaffolder/add-${{ parameters.name }}
 
     # Step 7 (production): Create PR for K8s manifests in the kubernetes GitOps repo.
     # Manifests land inside base-apps/oncall-crewai/{name}/ so they're synced by
@@ -406,6 +426,7 @@ spec:
         repoUrl: github.com?owner=arigsela&repo=kubernetes
         branchName: scaffolder/add-${{ parameters.name }}-manifests
         title: 'feat: add ${{ parameters.name }} K8s manifests'
+        update: true
         description: |
           ## K8s Manifests for ${{ parameters.name }}
 
@@ -443,6 +464,8 @@ spec:
         url: ${{ steps['pr-agent-code'].output.remoteUrl }}
       - title: K8s Manifests PR
         url: ${{ steps['pr-k8s-manifests'].output.remoteUrl }}
+      - title: Docker Build (GitHub Actions)
+        url: https://github.com/arigsela/claude-agents/actions
       - title: ECR — Orchestrator Repo
         url: ${{ steps['create-ecr-repos'].output.orchestratorConsoleUrl }}
       - title: ECR — Sub-Agent Repo

@@ -1,3 +1,4 @@
+{%- if values.domain %}
 # ==============================================================================
 # Ingress for ${{ values.name }}
 # ==============================================================================
@@ -9,10 +10,6 @@
 #   - IP whitelist for security (only your IPs can reach it)
 #   - Extended timeouts for AI agent queries (300s — LLM calls take time)
 #   - Rate limiting to prevent abuse
-#
-# This file is only generated when a domain is provided.
-# If no domain is configured, the orchestrator is only reachable within
-# the cluster (via port-forward or internal service DNS).
 #
 # DNS: Create an A record or CNAME pointing ${{ values.domain }}
 #      to your cluster's ingress controller external IP.
@@ -74,3 +71,4 @@ spec:
                 name: ${{ values.name }}-orchestrator
                 port:
                   number: 80
+{%- endif %}

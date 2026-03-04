@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/shared/ ./src/shared/
 
 # Copy sub-agent code
-COPY src/${{ values.subAgentName }}/ ./src/${{ values.subAgentName }}/
+COPY src/${{ values.subAgentPythonName }}/ ./src/${{ values.subAgentPythonName }}/
 
 # Copy config files (includes knowledge sources if present)
 COPY config/ ./config/
@@ -26,4 +26,4 @@ ENV PYTHONPATH=/app/src
 
 EXPOSE ${{ values.subAgentPort }}
 
-CMD ["uvicorn", "${{ values.subAgentName }}.server:app", "--host", "0.0.0.0", "--port", "${{ values.subAgentPort }}"]
+CMD ["uvicorn", "${{ values.subAgentPythonName }}.server:app", "--host", "0.0.0.0", "--port", "${{ values.subAgentPort }}"]

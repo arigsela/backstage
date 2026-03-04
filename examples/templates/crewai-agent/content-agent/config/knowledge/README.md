@@ -14,7 +14,7 @@ searches these files for relevant context and includes it in its reasoning.
 ## How to Add Knowledge
 
 1. Place your files in this directory
-2. Update the agent's tool in `src/${{ values.subAgentName }}/tools.py` to read from these files
+2. Update the agent's tool in `src/${{ values.subAgentPythonName }}/tools.py` to read from these files
 3. Rebuild the Docker image (`docker-compose up --build`)
 
 ## Example Knowledge Files
