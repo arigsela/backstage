@@ -112,16 +112,19 @@ async def service_info():
     }
 
 
+# IMPORTANT: This endpoint is intentionally a sync `def` (not `async def`).
+# CrewAI's Flow.kickoff() internally calls asyncio.run(), which cannot be
+# nested inside an already-running event loop (uvicorn's). By making this
+# a sync function, FastAPI automatically runs it in a thread pool, giving
+# it its own event loop where asyncio.run() works correctly.
 @app.post("/invoke", response_model=InvokeResponse)
-async def invoke(request: InvokeRequest):
+def invoke(request: InvokeRequest):
     """
     Main query endpoint.
 
     Receives a user query, runs it through the OrchestratorFlow (which
     classifies the query and routes it to the appropriate sub-agent via A2A),
     and returns the result.
-
-    The flow is synchronous but wrapped in async for FastAPI compatibility.
     """
     logger.info(f"Received query: {request.query[:100]}")
 
