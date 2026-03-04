@@ -43,6 +43,8 @@ AGENT_CARD = AgentCard(
     description="{% endraw %}${{ values.subAgentGoal }}{% raw %}",
     url=os.getenv("AGENT_URL", f"http://localhost:{SUB_AGENT_PORT}"),
     version="1.0.0",
+    default_input_modes=["text"],
+    default_output_modes=["text"],
     capabilities=AgentCapabilities(streaming=False),
     skills=[
         AgentSkill(
