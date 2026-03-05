@@ -21,13 +21,19 @@
 # - Failure isolation — if a sub-agent crashes, the orchestrator stays up
 # ==============================================================================
 {% raw %}
-from crewai import Agent, LLM
-from crewai.agent import A2AConfig, APIKeyAuth
+from crewai import Agent
+from crewai.a2a import A2AConfig
+from crewai.a2a.auth import APIKeyAuth
+from crewai.llm import LLM
 
 from shared.config import ANTHROPIC_MODEL, SUB_AGENT_URL, API_KEYS
 from shared.logging_config import setup_logging
 
 logger = setup_logging("orchestrator.agents")
+
+# CrewAI's A2AConfig fetches the agent card from the endpoint URL path.
+# Appending the well-known path tells CrewAI where to find the card.
+A2A_CARD_PATH = "/.well-known/agent-card.json"
 
 
 def create_sub_agent_delegate() -> Agent:
@@ -41,8 +47,7 @@ def create_sub_agent_delegate() -> Agent:
         A CrewAI Agent configured as an A2A delegate.
     """
     # Build the A2A agent card URL from the sub-agent's base URL.
-    # The /.well-known/agent-card.json endpoint is the A2A discovery standard.
-    agent_card_url = f"{SUB_AGENT_URL}/.well-known/agent-card.json"
+    agent_card_url = f"{SUB_AGENT_URL}{A2A_CARD_PATH}"
 
     # Get the first API key for authentication (empty list = no auth in dev)
     api_key = API_KEYS[0] if API_KEYS else ""

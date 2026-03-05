@@ -86,7 +86,7 @@ def timed_invoke(func):
     return wrapper
 
 
-def log_token_usage(crew_output) -> None:
+def log_token_usage(crew_output, agent_name: str = "") -> None:
     """
     Extract and log token usage from a CrewAI execution result.
 
@@ -95,12 +95,25 @@ def log_token_usage(crew_output) -> None:
 
     Args:
         crew_output: The CrewOutput returned by crew.kickoff().
+        agent_name: Optional label for identifying which agent's usage this is.
     """
     usage = getattr(crew_output, "token_usage", None)
     if usage:
+        # UsageMetrics may be a Pydantic model (attributes) or dict — handle both
+        if hasattr(usage, "total_tokens"):
+            total = usage.total_tokens
+            prompt = usage.prompt_tokens
+            completion = usage.completion_tokens
+        elif isinstance(usage, dict):
+            total = usage.get("total_tokens", "N/A")
+            prompt = usage.get("prompt_tokens", "N/A")
+            completion = usage.get("completion_tokens", "N/A")
+        else:
+            total = prompt = completion = "N/A"
+
+        prefix = f"[{agent_name}] " if agent_name else ""
         logger.info(
-            f"Token usage — total: {usage.get('total_tokens', 'N/A')}, "
-            f"prompt: {usage.get('prompt_tokens', 'N/A')}, "
-            f"completion: {usage.get('completion_tokens', 'N/A')}"
+            f"{prefix}Token usage — total: {total}, "
+            f"prompt: {prompt}, completion: {completion}"
         )
 {% endraw %}

@@ -22,9 +22,13 @@
 #   classify() → route_query() → handle_sub_agent() OR handle_no_match()
 # ==============================================================================
 {% raw %}
+import concurrent.futures
+
+from crewai import Crew, Task
 from crewai.flow.flow import Flow, start, router, listen
 from pydantic import BaseModel
 
+from orchestrator.agents import create_sub_agent_delegate
 from orchestrator.prompts import ROUTING_KEYWORDS, NO_MATCH_RESPONSE
 from shared.logging_config import setup_logging
 
@@ -68,9 +72,11 @@ class OrchestratorFlow(Flow[OrchestratorFlowState]):
 
         if matches:
             logger.info(f"Keyword match: {matches[:5]} → routing to sub-agent")
+            self.state.route = "sub_agent"
             return "sub_agent"
         else:
             logger.info("No keyword match → returning fallback response")
+            self.state.route = "no_match"
             return "no_match"
 
     @router(classify)
@@ -78,18 +84,13 @@ class OrchestratorFlow(Flow[OrchestratorFlowState]):
         """
         Step 2: Route based on the classification result.
 
-        The @router decorator receives the return value from classify().
-        It sets state.route and returns the route name, which determines
-        which @listen method runs next.
+        Reads state.route (set by classify) and returns the route name,
+        which determines which @listen method runs next.
 
         Returns:
             Route name: "sub_agent" or "no_match"
         """
-        # The router's return value from classify() is available as the step result
-        # We set it on state for tracking/logging purposes
-        classification = self.state.route or "no_match"
-        self.state.route = classification
-        return classification
+        return self.state.route or "no_match"
 
     @listen("sub_agent")
     def handle_sub_agent(self) -> str:
@@ -98,27 +99,37 @@ class OrchestratorFlow(Flow[OrchestratorFlowState]):
 
         This runs when route_query() returns "sub_agent".
         It creates a delegate agent and runs a single-task Crew to invoke it.
-        """
-        from crewai import Crew, Task
-        from orchestrator.agents import create_sub_agent_delegate
 
+        IMPORTANT: crew.kickoff() is run in a ThreadPoolExecutor because
+        flow.kickoff() already owns the event loop (via asyncio.run()),
+        and crew.kickoff() also calls asyncio.run() internally. Running
+        in a separate thread gives it its own event loop.
+        """
         logger.info(f"Delegating to sub-agent: {self.state.query[:100]}")
 
-        # Create the A2A delegate agent
-        delegate = create_sub_agent_delegate()
+        try:
+            # Create the A2A delegate agent
+            delegate = create_sub_agent_delegate()
 
-        # Create a task for the delegate — it will forward to the sub-agent via A2A
-        task = Task(
-            description=self.state.query,
-            expected_output="A complete and helpful response to the user's query.",
-            agent=delegate,
-        )
+            # Create a task for the delegate — it will forward to the sub-agent via A2A
+            task = Task(
+                description=self.state.query,
+                expected_output="A complete and helpful response to the user's query.",
+                agent=delegate,
+            )
 
-        # Run the crew (single agent, single task)
-        crew = Crew(agents=[delegate], tasks=[task], verbose=True)
-        result = crew.kickoff()
+            # Run the crew (single agent, single task)
+            crew = Crew(agents=[delegate], tasks=[task], verbose=True)
 
-        self.state.result = str(result)
+            # Run in a separate thread to avoid nested asyncio.run() conflict
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                result = pool.submit(crew.kickoff).result()
+
+            self.state.result = result.raw if hasattr(result, "raw") else str(result)
+        except Exception as e:
+            logger.error(f"Sub-agent delegation failed: {e}")
+            self.state.result = f"Agent error: {e}"
+
         return self.state.result
 
     @listen("no_match")

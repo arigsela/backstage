@@ -77,8 +77,10 @@ def create_agent() -> Agent:
 
         # --- BEHAVIORAL SETTINGS ---
         cache=False,                # Always fetch fresh data (no stale results)
-        reasoning=True,             # Enable chain-of-thought (higher quality answers)
         verbose=True,               # Detailed logging (set False in production)
+        # NOTE: reasoning=True requires an OpenAI API key even when using
+        # Anthropic as the main LLM. Enable only if OPENAI_API_KEY is set.
+        # reasoning=True,
 
         # --- SAFETY LIMITS ---
         max_execution_time=300,     # 5-minute timeout per invocation
@@ -136,9 +138,9 @@ def invoke(query: str) -> str:
         tasks=[task],
         process=Process.sequential,   # Tasks run in order (only one here)
         verbose=True,
-        # Planning mode: CrewAI creates an execution plan before running tasks.
-        # This improves quality for complex queries at the cost of one extra LLM call.
-        planning=True,
+        # NOTE: planning=True requires an OpenAI API key even when using
+        # Anthropic as the main LLM. Enable only if OPENAI_API_KEY is set.
+        # planning=True,
         # Observability callbacks
         step_callback=agent_step_callback,
         task_callback=task_completion_callback,

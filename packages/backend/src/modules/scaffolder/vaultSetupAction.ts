@@ -17,8 +17,9 @@
  *
  * IDEMPOTENCY:
  * All Vault API calls are create-or-update (PUT/POST). Running this action
- * multiple times with the same inputs produces the same result — existing
- * resources are overwritten with identical values.
+ * multiple times is safe — policies and roles are overwritten with identical
+ * values, and secrets use a merge strategy: existing real values are preserved,
+ * placeholders are only written for keys that don't yet exist.
  */
 
 import { createTemplateAction } from '@backstage/plugin-scaffolder-node';
@@ -202,18 +203,49 @@ export function createVaultSetupAction() {
       );
 
       // ------------------------------------------------------------------
-      // Step 3: Seed placeholder secrets
+      // Step 3: Seed placeholder secrets (create-if-not-exists)
       // ------------------------------------------------------------------
-      // Writes placeholder values so ExternalSecrets can sync immediately
-      // after the K8s manifests are deployed. Users replace these with real
-      // values after initial deployment.
-      const secretData: Record<string, string> = {
-        'anthropic-api-key': 'PLACEHOLDER_REPLACE_ME',
-        'api-keys': 'PLACEHOLDER_REPLACE_ME',
-      };
-
+      // Only writes placeholder values for keys that don't already exist.
+      // This prevents overwriting real secrets when the template is re-run
+      // (e.g. to rebuild images or update K8s manifests).
+      const requiredKeys: string[] = ['anthropic-api-key', 'api-keys'];
       if (enableKnowledge) {
-        secretData['openai-api-key'] = 'PLACEHOLDER_REPLACE_ME';
+        requiredKeys.push('openai-api-key');
+      }
+
+      // Try to read existing secrets from Vault
+      let existingData: Record<string, string> = {};
+      try {
+        const readUrl = `${vaultAddr}/v1/${secretPath}`;
+        ctx.logger.info(`vault:setup — GET ${readUrl} (checking existing secrets)`);
+        const readResponse = await fetch(readUrl, {
+          method: 'GET',
+          headers: {
+            'X-Vault-Token': vaultToken,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (readResponse.ok) {
+          const body = (await readResponse.json()) as {
+            data?: { data?: Record<string, string> };
+          };
+          existingData = body?.data?.data ?? {};
+          ctx.logger.info(
+            `vault:setup — Found existing keys: ${Object.keys(existingData).join(', ')}`,
+          );
+        }
+      } catch {
+        ctx.logger.info('vault:setup — No existing secrets found, will create all');
+      }
+
+      // Build merged data: keep existing real values, add placeholders only for missing keys
+      const mergedData: Record<string, string> = { ...existingData };
+      const newKeys: string[] = [];
+      for (const key of requiredKeys) {
+        if (!mergedData[key]) {
+          mergedData[key] = 'PLACEHOLDER_REPLACE_ME';
+          newKeys.push(key);
+        }
       }
 
       await vaultRequest(
@@ -221,12 +253,19 @@ export function createVaultSetupAction() {
         vaultToken,
         'POST',
         secretPath,
-        { data: secretData },
+        { data: mergedData },
         ctx.logger,
       );
-      ctx.logger.info(
-        `vault:setup — Seeded placeholder secrets at ${secretPath} (keys: ${Object.keys(secretData).join(', ')})`,
-      );
+
+      if (newKeys.length > 0) {
+        ctx.logger.info(
+          `vault:setup — Seeded placeholder secrets for new keys: ${newKeys.join(', ')}`,
+        );
+      } else {
+        ctx.logger.info(
+          `vault:setup — All required keys already exist, no placeholders written`,
+        );
+      }
 
       // Set outputs for downstream steps and template output section
       ctx.output('policyName', policyName);

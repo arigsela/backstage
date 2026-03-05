@@ -4,10 +4,29 @@ ${{ values.description }}
 
 ## Architecture
 
-This is a CrewAI multi-agent project with:
+This is a CrewAI multi-agent project with two services:
 
-- **Orchestrator** (port ${{ values.orchestratorPort }}): Routes queries to sub-agents via A2A protocol
-- **${{ values.subAgentDisplayName }}** (port ${{ values.subAgentPort }}): ${{ values.subAgentGoal }}
+- **Orchestrator** (port ${{ values.orchestratorPort }}): FastAPI web server that receives queries, classifies them
+  via keyword matching, and routes to sub-agents using the A2A (Agent-to-Agent) protocol
+- **${{ values.subAgentDisplayName }}** (port ${{ values.subAgentPort }}): CrewAI agent that processes domain-specific
+  queries using tools, knowledge sources, and an Anthropic LLM
+
+```
+                    ┌─────────────────────────────────┐
+  HTTP request      │       Orchestrator (FastAPI)     │
+  POST /invoke ───▶ │  classify ─▶ route ─▶ delegate  │
+                    │         │              │         │
+                    └─────────┼──────────────┼─────────┘
+                              │              │
+                      no_match│              │ sub_agent (A2A)
+                              ▼              ▼
+                    "I can't help       ┌──────────────┐
+                     with that"         │  Sub-Agent   │
+                                        │  (CrewAI)    │
+                                        │  tools +     │
+                                        │  knowledge   │
+                                        └──────────────┘
+```
 
 ## Quick Start
 
@@ -20,7 +39,7 @@ This is a CrewAI multi-agent project with:
 ### Local Development
 
 ```bash
-# 1. Copy environment file and fill in your values
+# 1. Copy environment file and fill in your API key
 cp .env.example .env
 
 # 2. Start services with Docker Compose
@@ -42,13 +61,115 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-## Deployment
+## API Reference
 
-### Build & Push Images
+The orchestrator exposes three endpoints. Visit `/docs` for interactive Swagger UI.
+
+### `GET /health`
+
+Health check for K8s liveness/readiness probes.
 
 ```bash
-# Build and push to ECR (requires AWS credentials)
-./deploy-to-ecr.sh --version 1.0.0
+curl http://localhost:${{ values.orchestratorPort }}/health
+# {"status": "healthy", "service": "${{ values.name }}"}
+```
+
+### `GET /info`
+
+Returns metadata about the orchestrator, configured sub-agents, and routing keywords.
+
+```bash
+curl http://localhost:${{ values.orchestratorPort }}/info
+# {"service": "...", "role": "orchestrator", "sub_agents": [...]}
+```
+
+### `POST /invoke`
+
+Main query endpoint. Sends a query through the orchestrator flow (classify, route, delegate).
+
+```bash
+curl -X POST http://localhost:${{ values.orchestratorPort }}/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"query": "your question here"}'
+# {"result": "...", "route": "sub_agent"}
+```
+
+**Note:** AI agent queries can take 30-120+ seconds due to LLM inference, tool calls, and
+chain-of-thought reasoning. The K8s ingress is configured with 300s timeouts to accommodate this.
+
+## Interacting with the Agent
+
+### From inside the cluster
+
+```bash
+# Direct service call (other pods in the same namespace)
+curl -X POST http://${{ values.name }}-orchestrator/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"query": "your question"}'
+
+# From a different namespace
+curl -X POST http://${{ values.name }}-orchestrator.${{ values.namespace }}.svc:80/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"query": "your question"}'
+```
+
+### Via kubectl port-forward (quickest for testing)
+
+```bash
+# Terminal 1: Forward the orchestrator port to localhost
+kubectl port-forward svc/${{ values.name }}-orchestrator 8000:80 -n ${{ values.namespace }}
+
+# Terminal 2: Send queries
+curl -X POST http://localhost:8000/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"query": "your question"}'
+```
+
+### Via ingress (if domain is configured)
+{%- if values.domain %}
+
+The orchestrator is exposed at `https://${{ values.domain }}` with TLS via cert-manager
+and IP whitelisting. Create a DNS A/CNAME record pointing to your cluster's ingress
+controller external IP.
+
+```bash
+curl -X POST https://${{ values.domain }}/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"query": "your question"}'
+```
+{%- else %}
+
+No domain was configured during scaffolding. To expose the orchestrator externally, create
+an Ingress resource pointing to the `${{ values.name }}-orchestrator` service on port 80.
+See the existing agents' ingress manifests for a reference configuration with TLS,
+IP whitelisting, and extended timeouts.
+{%- endif %}
+
+## Deployment
+
+### Docker Image Builds
+
+Docker images are built by GitHub Actions, triggered automatically by the Backstage
+scaffolder via `workflow_dispatch`. The workflow:
+
+1. Checks out the PR branch from `arigsela/claude-agents`
+2. Builds `${{ values.name }}-orchestrator` and `${{ values.name }}-${{ values.subAgentName }}` images
+3. Pushes to ECR with version tag + `latest`
+
+To rebuild manually:
+
+```bash
+# Via GitHub Actions (preferred — no Docker daemon needed locally)
+gh workflow run build-agent-images.yaml \
+  -R arigsela/claude-agents \
+  -r main \
+  -f project-name=${{ values.name }} \
+  -f sub-agent-name=${{ values.subAgentName }} \
+  -f version=1.0.1 \
+  -f branch=main
+
+# Or locally with the deploy script (requires Docker + AWS creds)
+./deploy-to-ecr.sh --version 1.0.1
 ```
 
 ### Kubernetes Deployment
@@ -60,7 +181,7 @@ template creates a PR there automatically. Resources are synced by the existing
 
 **Automated by the Backstage scaffolder:**
 - ECR repositories (`${{ values.name }}-orchestrator` and `${{ values.name }}-${{ values.subAgentName }}`) are created automatically
-- Docker images are built and pushed to ECR during scaffolding
+- Docker images are built via GitHub Actions workflow dispatch
 - Vault policy, K8s auth role, and placeholder secrets are provisioned automatically
 
 **Post-merge steps** (after the K8s PR is merged):
@@ -79,6 +200,17 @@ template creates a PR there automatically. Resources are synced by the existing
 {%- endif %}
 
 ## Customizing Your Agent
+
+### Modifying Routing Keywords
+
+The orchestrator uses keyword matching to decide which queries route to the sub-agent.
+Queries that don't match any keyword get a fallback response explaining what topics
+the agent handles.
+
+Edit `src/orchestrator/prompts.py` to update the `ROUTING_KEYWORDS` list, or set
+the `ROUTING_KEYWORDS` environment variable (comma-separated) at runtime. Include
+common variations and abbreviations to avoid missed matches — for example, both
+`"dnd"` and `"d&d"` for Dungeons & Dragons.
 
 ### Adding Knowledge Sources (RAG)
 
@@ -129,15 +261,13 @@ from crewai.tools import tool
 
 @tool("my_custom_tool")
 def my_custom_tool(query: str) -> str:
-    """Description of what this tool does."""
+    """Description of what this tool does — the LLM reads this to decide when to call it."""
     # Your implementation here
     return json.dumps({"result": "..."})
 ```
 
-### Modifying Routing Keywords
-
-Edit `src/orchestrator/prompts.py` or update the `ROUTING_KEYWORDS` environment
-variable to change which queries route to your sub-agent.
+Tools must return strings (the LLM reads the return value as text). Handle errors
+gracefully by returning error messages instead of raising exceptions.
 
 ## Adding More Sub-Agents
 
@@ -146,15 +276,66 @@ variable to change which queries route to your sub-agent.
 3. Add K8s manifests in the [arigsela/kubernetes](https://github.com/arigsela/kubernetes) repo under `base-apps/oncall-crewai/${{ values.name }}/`
 4. Update the orchestrator's routing keywords and agent factories in `src/orchestrator/`
 
+## Known Constraints
+
+### CrewAI 1.6.x Pin
+
+This project pins `crewai==1.6.1`. Versions 1.10+ add LanceDB as the default memory
+backend, and LanceDB's Rust binaries require AVX2 CPU instructions. Older CPUs
+(e.g. Intel E5-2670 Sandy Bridge) only support AVX, causing SIGILL (exit code 132)
+on `Flow()` instantiation. Stay on 1.6.x unless your cluster nodes have AVX2.
+
+### Reasoning and Planning Require OpenAI
+
+CrewAI's `reasoning=True` and `planning=True` options use OpenAI internally, even
+when the main LLM is Anthropic. These are disabled by default. To enable them:
+
+1. Set `OPENAI_API_KEY` in your environment
+2. Uncomment `reasoning=True` in `src/${{ values.subAgentPythonName }}/agent.py`
+3. Uncomment `planning=True` in the Crew constructor
+
+### Import Paths (CrewAI 1.6.x)
+
+CrewAI 1.6.x uses different import paths than newer versions:
+
+```python
+from crewai.tools import tool        # NOT: from crewai import tool
+from crewai.a2a import A2AConfig     # NOT: from crewai.agent import A2AConfig
+from crewai.a2a.auth import APIKeyAuth
+from crewai.llm import LLM           # NOT: from crewai import LLM
+```
+
+### Nested Event Loop
+
+The orchestrator's `/invoke` endpoint is intentionally a sync function (`def`, not
+`async def`). CrewAI's `Flow.kickoff()` calls `asyncio.run()` internally, which
+cannot run inside uvicorn's event loop. FastAPI automatically runs sync functions
+in a thread pool, giving each invocation its own event loop. The flow's
+`handle_sub_agent` method uses `concurrent.futures.ThreadPoolExecutor` for the
+same reason — `crew.kickoff()` also calls `asyncio.run()`.
+
 ## Project Structure
 
 ```
 ${{ values.name }}/
 ├── src/
-│   ├── shared/          # Common utilities (config, logging, models)
-│   ├── orchestrator/    # Query router + A2A delegation
-│   └── ${{ values.subAgentName }}/  # Sub-agent with tools and knowledge
-├── docker/              # Dockerfiles per service
-├── config/              # Configuration files (knowledge sources, etc.)
-└── tests/               # Unit and integration tests
+│   ├── shared/                        # Common utilities (config, logging, models, observability)
+│   ├── orchestrator/                  # FastAPI app + CrewAI Flow (classify → route → delegate)
+│   │   ├── main.py                    # FastAPI endpoints (/health, /info, /invoke)
+│   │   ├── flow.py                    # OrchestratorFlow (keyword routing state machine)
+│   │   ├── agents.py                  # A2A delegate agent creation
+│   │   └── prompts.py                 # Routing keywords and fallback messages
+│   └── ${{ values.subAgentPythonName }}/  # Sub-agent with tools and knowledge
+│       ├── agent.py                   # CrewAI Agent + Crew creation and invocation
+│       ├── tools.py                   # @tool-decorated functions (search, health, etc.)
+│       ├── prompts.py                 # Agent role, goal, backstory, task template
+│       ├── server.py                  # A2A server (receives delegated queries)
+│       ├── executor.py                # A2A executor (bridges A2A → agent.invoke())
+│       └── config/                    # YAML config for agents and tasks
+├── docker/                            # Dockerfiles per service
+├── config/knowledge/                  # Knowledge files for RAG / keyword search
+├── tests/                             # Unit and integration tests
+├── docker-compose.yml                 # Local development stack
+├── requirements.txt                   # Python dependencies (crewai pinned to 1.6.1)
+└── .env.example                       # Environment variable template
 ```

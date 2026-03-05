@@ -10,11 +10,16 @@
 # - a2a-sdk: Google's Agent-to-Agent protocol SDK
 # - pydantic: Data validation and settings management
 # - anthropic: Anthropic API client (used by CrewAI via LiteLLM)
+#
+# IMPORTANT: crewai is pinned to 1.6.x because 1.10+ adds LanceDB as the
+# default memory backend. LanceDB's Rust binaries require AVX2 CPU
+# instructions, which older CPUs (e.g. Intel E5-2670 Sandy Bridge) lack,
+# causing SIGILL (exit code 132) on Flow() instantiation.
 # ==============================================================================
 
 # --- AI / Agent Framework ---
-crewai>=1.6.0,<2.0.0
-crewai[tools]>=1.6.0,<2.0.0
+crewai==1.6.1
+crewai[tools]==1.6.1
 
 # --- Web Framework ---
 fastapi>=0.115.0,<1.0.0

@@ -29,7 +29,7 @@
 import json
 import os
 from pathlib import Path
-from crewai import tool
+from crewai.tools import tool
 
 from shared.logging_config import setup_logging
 
