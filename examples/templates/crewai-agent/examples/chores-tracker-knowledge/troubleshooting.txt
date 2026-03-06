@@ -1,0 +1,127 @@
+# Chores Tracker Troubleshooting Guide
+
+## Common Issues and Solutions
+
+### 1. Backend Pods Not Starting
+SYMPTOM: Backend pods stuck in CrashLoopBackOff or pending state.
+
+STEPS:
+1. Check pod status: kubectl get pods -n chores-tracker
+2. Check pod events: kubectl describe pod <pod-name> -n chores-tracker
+3. Check logs: kubectl logs <pod-name> -n chores-tracker
+
+COMMON CAUSES:
+- Database not reachable: Check PostgreSQL cluster status
+  kubectl get pods -n postgresql
+  kubectl get cluster -n postgresql (CloudNativePG CRD)
+- Missing secrets: Check ExternalSecret sync status
+  kubectl get externalsecret -n chores-tracker
+  If status shows "SecretSyncedError", check Vault connectivity
+- IMAGE_PULL error: ECR credentials expired
+  Check: kubectl get secret ecr-registry -n chores-tracker -o yaml
+  Solution: Wait for ECR CronJob to refresh, or manually trigger it
+
+### 2. 502/504 Gateway Errors
+SYMPTOM: Users see 502 Bad Gateway or 504 Gateway Timeout.
+
+STEPS:
+1. Check backend pod readiness: kubectl get pods -n chores-tracker
+   Both pods should show 2/2 Ready
+2. Check ingress configuration:
+   kubectl get ingress -n chores-tracker
+   kubectl describe ingress chores-tracker-backend-nginx -n chores-tracker
+3. Check backend logs for errors:
+   kubectl logs -l app=chores-tracker-backend -n chores-tracker --tail=50
+
+COMMON CAUSES:
+- Pods restarting during deployment: Wait for canary rollout to complete
+  kubectl get rollout -n chores-tracker
+  kubectl rollout status rollout/chores-tracker-backend -n chores-tracker
+- Health check failures: Backend takes 5-6 min to initialize
+  Wait for readiness probe (60s initial delay) to pass
+- Database connection pool exhausted: Check DATABASE_URL and connection count
+
+### 3. Authentication Failures (401 Unauthorized)
+SYMPTOM: API calls return 401 even with valid credentials.
+
+STEPS:
+1. Verify JWT SECRET_KEY hasn't changed:
+   kubectl get externalsecret orchestrator-secrets -n chores-tracker -o yaml
+   If the secret was recently rotated, existing tokens become invalid
+2. Check token expiration: Decode the JWT at jwt.io
+3. Verify the login endpoint works:
+   curl -X POST https://chores.arigsela.com/api/v1/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"username":"test","password":"test"}'
+
+### 4. Database Connection Errors
+SYMPTOM: Backend logs show "connection refused" or "timeout" to PostgreSQL.
+
+STEPS:
+1. Check CloudNativePG cluster status:
+   kubectl get cluster -n postgresql
+   Status should show "Cluster in healthy state"
+2. Check the primary pod:
+   kubectl get pods -n postgresql -l role=primary
+3. Verify connectivity from backend namespace:
+   kubectl exec -it <backend-pod> -n chores-tracker -- \
+     python -c "import asyncpg; print('OK')"
+4. Check DATABASE_URL secret value:
+   kubectl get secret chores-tracker-backend-secrets -n chores-tracker \
+     -o jsonpath='{.data.DATABASE_URL}' | base64 -d
+
+COMMON CAUSES:
+- CloudNativePG failover: Primary pod changed, DNS needs time to update
+- Vault secret rotation: DATABASE_URL updated but pod not restarted
+  Solution: kubectl rollout restart deployment/chores-tracker-backend -n chores-tracker
+
+### 5. Frontend Not Loading / Blank Page
+SYMPTOM: https://chores.arigsela.com shows blank page or errors.
+
+STEPS:
+1. Check frontend pods: kubectl get pods -n chores-tracker-frontend
+2. Check frontend logs: kubectl logs -l app=chores-tracker-frontend -n chores-tracker-frontend
+3. Verify API_URL config:
+   kubectl get configmap frontend-config -n chores-tracker-frontend -o yaml
+   Should show API_URL: "https://chores.arigsela.com/api/v1"
+4. Check browser console for CORS errors (should be configured in backend)
+
+### 6. Canary Deployment Stuck
+SYMPTOM: New version deployed but traffic not shifting.
+
+STEPS:
+1. Check rollout status:
+   kubectl get rollout -n chores-tracker
+   kubectl describe rollout chores-tracker-backend -n chores-tracker
+2. Check canary analysis (if configured):
+   kubectl get analysisrun -n chores-tracker
+3. Manual promotion (if paused):
+   kubectl argo rollouts promote chores-tracker-backend -n chores-tracker
+
+### 7. ArgoCD Sync Failures
+SYMPTOM: Changes in Git not reflected in cluster.
+
+STEPS:
+1. Check ArgoCD app status:
+   argocd app get chores-tracker-backend
+   (or check ArgoCD UI)
+2. Look for sync errors:
+   argocd app sync chores-tracker-backend --dry-run
+3. Common issues:
+   - YAML syntax errors in manifests
+   - Resource conflicts (resource exists but not managed by ArgoCD)
+   - Namespace doesn't exist (CreateNamespace should handle this)
+
+## Health Check Endpoints
+- Container health: GET /health (port 8000)
+- Application health: GET /api/v1/healthcheck
+- Prometheus metrics: GET /metrics (port 8000)
+
+## Quick Diagnostic Commands
+kubectl get pods -n chores-tracker                    # Backend pods
+kubectl get pods -n chores-tracker-frontend           # Frontend pods
+kubectl get rollout -n chores-tracker                 # Canary status
+kubectl get externalsecret -n chores-tracker          # Secret sync
+kubectl get ingress -n chores-tracker                 # Ingress rules
+kubectl get cluster -n postgresql                     # Database status
+kubectl logs -l app=chores-tracker-backend -n chores-tracker --tail=20

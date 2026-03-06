@@ -1,0 +1,65 @@
+# Chores Tracker Application Architecture
+
+## Overview
+Chores Tracker is a family household chore management system with parent/child
+role-based accounts, a reward system, and HTMX-based real-time UI updates.
+
+Source Repository: https://github.com/arigsela/chores-tracker
+Current Deployed Version: v7.0.2 (backend), v1.5.3 (frontend)
+Domain: https://chores.arigsela.com
+
+## Technology Stack
+- Backend: FastAPI (Python 3.11) with async support
+- Database: PostgreSQL (CloudNativePG, in-cluster)
+- Frontend: HTMX + Jinja2 server-side templates (Node.js runtime)
+- Authentication: JWT tokens with role-based access (parent/child)
+- Container Registry: AWS ECR (us-east-2)
+
+## System Architecture
+
+### Backend Service (chores-tracker-backend)
+- Namespace: chores-tracker
+- Replicas: 2
+- Port: 8000 (container) exposed on port 80 (service)
+- Deployment type: Argo Rollouts with canary strategy
+- Canary steps: 20% (5min) -> 50% (5min) -> 80% (5min) -> 100%
+- Image: 852893458518.dkr.ecr.us-east-2.amazonaws.com/chores-tracker:7.0.2
+
+### Frontend Service (chores-tracker-frontend)
+- Namespace: chores-tracker-frontend (separate namespace)
+- Replicas: 2
+- Port: 3000 (container) exposed on port 80 (service)
+- Deployment type: Standard Kubernetes Deployment
+- Image: 852893458518.dkr.ecr.us-east-2.amazonaws.com/chores-tracker-frontend:1.5.3
+- Connects to backend via: https://chores.arigsela.com/api/v1
+
+### Database
+- Type: PostgreSQL via CloudNativePG (migrated from MySQL/Crossplane)
+- Host: postgresql-cluster-rw.postgresql.svc.cluster.local:5432
+- Database: chores_tracker
+- User: chores_user
+- Connection string format: postgresql+asyncpg://chores_user:<password>@<host>:5432/chores_tracker
+
+### Ingress Routing
+Both backend and frontend share the domain chores.arigsela.com:
+- Backend: /api/* routes (priority 100, rewrite /api/$1 -> /)
+- Frontend: / root path (priority 50, catch-all)
+- TLS: Let's Encrypt production (cert-manager)
+- IP Whitelist: Configured via nginx annotations
+
+## Key Application Features
+- Parent account creation and management
+- Child account role assignment with permissions
+- Chore creation, assignment, and tracking
+- Recurring chores with cooldown periods
+- Reward system (fixed or range-based amounts)
+- Real-time UI updates via HTMX (no full page reloads)
+
+## Service Dependencies
+1. PostgreSQL (CloudNativePG) - Data persistence
+2. Vault - Secret storage and rotation
+3. External Secrets Operator - Syncs secrets from Vault to K8s
+4. Cert-Manager - TLS certificate management
+5. Nginx Ingress Controller - HTTP/HTTPS routing
+6. Argo Rollouts - Canary deployment orchestration
+7. AWS ECR - Container image registry

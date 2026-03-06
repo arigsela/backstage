@@ -1,0 +1,474 @@
+# ==============================================================================
+# CrewAI Multi-Agent Project — Backstage Software Template
+# ==============================================================================
+#
+# HOW THIS TEMPLATE WORKS:
+# This is a Backstage "Software Template" — it defines a self-service wizard
+# that developers use from the Backstage UI (/create) to scaffold new projects.
+#
+# The template has three main sections:
+# 1. PARAMETERS — define the wizard form (what the user fills in)
+# 2. STEPS — define what happens after the user clicks "Create"
+# 3. OUTPUT — define what links to show the user when done
+#
+# TEMPLATE ENGINE:
+# Content files in ./content-agent/ and ./content-k8s/ use Nunjucks templating.
+# Any file can contain ${{ values.someParam }} which gets replaced with the
+# user's input. Python code with { } (dicts, f-strings) MUST be wrapped in
+# {% raw %}...{% endraw %} blocks to avoid Nunjucks conflicts.
+#
+# REFERENCE:
+# Based on the oncall-crewai multi-agent architecture (A2A protocol, CrewAI
+# agents, FastAPI servers). See docs/plans/crewai-agent-template-implementation-plan.md
+# ==============================================================================
+
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: crewai-agent-template
+  title: CrewAI Multi-Agent Project
+  description: >-
+    Scaffold a new CrewAI multi-agent project with an orchestrator and
+    configurable sub-agents. Creates two PRs: one for agent code in the
+    claude-agents monorepo, and one for K8s manifests in the kubernetes GitOps repo.
+  tags:
+    - crewai
+    - ai-agent
+    - python
+    - a2a
+    - recommended
+  # Annotations help Backstage plugins understand this entity.
+  # The backstage.io/techdocs-ref would enable TechDocs if we add an mkdocs.yml.
+  annotations:
+    backstage.io/techdocs-ref: dir:.
+
+spec:
+  # owner: which Backstage entity "owns" this template (shown in the UI)
+  owner: group:platform-engineering
+  # type: what kind of component this template creates
+  type: service
+
+  # ============================================================================
+  # PARAMETERS — The Wizard Form
+  # ============================================================================
+  # Each top-level list item is one PAGE of the wizard. Users click "Next" to
+  # move between pages. Parameters follow JSON Schema with Backstage ui:* extensions.
+  #
+  # Available ui:field types:
+  #   - (default) — renders as text input, number input, checkbox, etc. based on `type`
+  #   - EntityPicker — dropdown of Backstage catalog entities
+  #   - RepoUrlPicker — specialized GitHub repo selector
+  #   - OwnedEntityPicker — entities owned by the current user
+  # ============================================================================
+
+  parameters:
+    # --- WIZARD PAGE 1: Project Details ---
+    # Basic information about the new agent project.
+    - title: Project Details
+      description: Basic information about your new CrewAI agent project.
+      required:
+        - name
+        - description
+        - owner
+      properties:
+        name:
+          title: Project Name
+          type: string
+          description: >-
+            Unique name for the agent project (lowercase, hyphens allowed).
+            This becomes the directory name in the claude-agents monorepo
+            and Backstage entity name.
+          pattern: '^[a-z][a-z0-9-]*$'
+          # ui:autofocus makes the browser focus this field when the page loads
+          ui:autofocus: true
+          ui:help: 'Example: chores-knowledge-agent'
+
+        description:
+          title: Description
+          type: string
+          description: What does this agent do? Shown in the Backstage catalog and repo description.
+          ui:options:
+            rows: 3
+          ui:help: 'Example: AI agent with deep knowledge of the Chores Tracker application'
+
+        owner:
+          title: Owner
+          type: string
+          description: The Backstage group or user that owns this agent.
+          # EntityPicker renders a dropdown of catalog entities filtered by kind
+          ui:field: EntityPicker
+          ui:options:
+            catalogFilter:
+              kind:
+                - Group
+                - User
+
+    # --- WIZARD PAGE 2: Orchestrator Configuration ---
+    # The orchestrator is the "front door" — it receives queries and routes
+    # them to the appropriate sub-agent via the A2A protocol.
+    - title: Orchestrator Configuration
+      description: >-
+        Configure the orchestrator service. It receives user queries and
+        routes them to sub-agents using keyword-based classification.
+      properties:
+        orchestratorPort:
+          title: Orchestrator Port
+          type: integer
+          description: Port the orchestrator FastAPI server listens on.
+          default: 8000
+          # enum restricts choices to known-good ports
+          enum:
+            - 8000
+            - 8001
+            - 9000
+
+        routingKeywords:
+          title: Routing Keywords
+          type: string
+          description: >-
+            Comma-separated keywords that trigger routing to your sub-agent.
+            The orchestrator uses keyword matching (not LLM) for fast, deterministic routing.
+          ui:help: 'Example: chores, tasks, assignments, household, todo, schedule'
+
+    # --- WIZARD PAGE 3: Sub-Agent Configuration ---
+    # Each sub-agent is an independent CrewAI agent with its own tools,
+    # knowledge sources, and A2A endpoint.
+    - title: Sub-Agent Configuration
+      description: >-
+        Configure your first sub-agent. This is a CrewAI agent with its own
+        tools and (optionally) RAG knowledge sources. You can add more
+        sub-agents later by editing the generated code.
+      required:
+        - subAgentName
+        - subAgentRole
+        - subAgentGoal
+      properties:
+        subAgentName:
+          title: Sub-Agent Name
+          type: string
+          description: >-
+            Short name for the sub-agent (lowercase, hyphens). Used for the
+            Python module name, Docker image, and K8s service name.
+          pattern: '^[a-z][a-z0-9-]*$'
+          ui:help: 'Example: knowledge-agent'
+
+        subAgentDisplayName:
+          title: Display Name
+          type: string
+          description: Human-readable name shown in logs and A2A discovery.
+          ui:help: 'Example: Chores Tracker Knowledge Specialist'
+
+        subAgentRole:
+          title: CrewAI Role
+          type: string
+          description: >-
+            The agent's role in CrewAI. This is the "job title" that shapes
+            the agent's behavior and expertise.
+          ui:options:
+            rows: 2
+          ui:help: 'Example: Chores Tracker Application Expert'
+
+        subAgentGoal:
+          title: CrewAI Goal
+          type: string
+          description: >-
+            What the agent is trying to achieve. This drives the agent's
+            decision-making and tool selection.
+          ui:options:
+            rows: 3
+          ui:help: >-
+            Example: Answer questions about the Chores Tracker app architecture,
+            API, deployment, and troubleshooting using knowledge sources and tools.
+
+        subAgentBackstory:
+          title: CrewAI Backstory (Prompt)
+          type: string
+          description: >-
+            The agent's backstory — this is the main prompt that tells the LLM
+            how to behave. Include domain expertise, constraints, output format
+            preferences, and tool usage guidelines.
+          ui:widget: textarea
+          ui:options:
+            rows: 8
+          ui:help: >-
+            Example: You are an expert on the Chores Tracker application. You know
+            its FastAPI backend, React frontend, PostgreSQL database, and K8s deployment.
+            Always cite specific files or commands. Never fabricate information.
+
+        subAgentPort:
+          title: Sub-Agent Port
+          type: integer
+          description: Port the sub-agent FastAPI server listens on.
+          default: 8080
+          enum:
+            - 8080
+            - 8081
+            - 9080
+
+        enableKnowledge:
+          title: Enable Knowledge/RAG
+          type: boolean
+          description: >-
+            Include CrewAI knowledge source setup for RAG (Retrieval-Augmented
+            Generation). This adds a config/knowledge/ directory where you
+            place .txt, .json, .csv, or .pdf files the agent uses for context.
+          default: true
+
+    # --- WIZARD PAGE 4: Infrastructure ---
+    # Deployment configuration and dry-run toggle.
+    # Agent code PRs to arigsela/claude-agents, K8s manifests PR to arigsela/kubernetes.
+    - title: Infrastructure
+      description: >-
+        Deployment configuration. The template creates two PRs: agent code to the
+        claude-agents monorepo and K8s manifests to the kubernetes GitOps repo.
+      properties:
+        dryRun:
+          title: Dry Run (Testing Mode)
+          type: boolean
+          description: >-
+            When enabled, writes output to /tmp instead of creating GitHub PRs.
+            Disable this when you're ready to create real PRs.
+          default: true
+
+        version:
+          title: Initial Image Version
+          type: string
+          description: >-
+            Version tag for the initial Docker images pushed to ECR.
+            Subsequent versions are managed via the deploy-to-ecr.sh script.
+          default: '1.0.0'
+          ui:help: 'Semantic version for the first image build (e.g. 1.0.0)'
+
+        domain:
+          title: Ingress Domain (optional)
+          type: string
+          description: >-
+            Subdomain for the nginx ingress. Leave empty to skip ingress generation.
+            TLS is auto-configured via cert-manager letsencrypt-prod.
+          ui:help: 'Example: chores-agent.arigsela.com'
+
+        namespace:
+          title: Kubernetes Namespace
+          type: string
+          description: >-
+            K8s namespace to deploy into. Defaults to 'oncall-crewai' which
+            already has ECR image pull secrets synced. Only change this if you
+            need a dedicated namespace (and remember to add it to the ECR auth
+            CronJob in base-apps/ecr-auth/cronjobs.yaml).
+          default: oncall-crewai
+          ui:help: 'Default: oncall-crewai (already has ECR auth configured)'
+
+        vaultRole:
+          title: Vault Role
+          type: string
+          description: >-
+            Vault role name for secret management. Defaults to the project name.
+            Must match a role configured in Vault with Kubernetes auth.
+          ui:help: 'Leave empty to use project name as vault role'
+
+  # ============================================================================
+  # STEPS — What Happens After "Create"
+  # ============================================================================
+  # Steps run sequentially on the Backstage backend. Each step is an "action"
+  # provided by a scaffolder module. Later steps can reference outputs from
+  # earlier steps via ${{ steps['stepId'].output.fieldName }}.
+  #
+  # DUAL-REPO WORKFLOW:
+  # 1. Render agent code from ./content-agent/ → workspace agent-code/
+  # 2. Render K8s manifests from ./content-k8s/ → workspace k8s-manifests/
+  #    (manifests go into base-apps/oncall-crewai/{name}/ — managed by the
+  #    existing oncall-crewai ArgoCD Application, no separate app created)
+  # 3. PR agent code to arigsela/claude-agents (production) OR write to /tmp (dry run)
+  # 4. PR K8s manifests to arigsela/kubernetes (production) OR write to /tmp (dry run)
+  # ============================================================================
+
+  steps:
+    # Step 1: Render agent code (Python source, Dockerfiles, tests, etc.)
+    # from ./content-agent/ into the workspace under agent-code/ subdirectory.
+    - id: fetch-agent-code
+      name: Render Agent Code
+      action: fetch:template
+      input:
+        url: ./content-agent
+        targetPath: agent-code
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          namespace: ${{ parameters.namespace }}
+          orchestratorPort: ${{ parameters.orchestratorPort }}
+          routingKeywords: ${{ parameters.routingKeywords }}
+          subAgentName: ${{ parameters.subAgentName }}
+          # Python-safe version of subAgentName (hyphens → underscores).
+          # Python module/package names cannot contain hyphens.
+          subAgentPythonName: ${{ parameters.subAgentName | replace("-", "_") }}
+          subAgentDisplayName: ${{ parameters.subAgentDisplayName }}
+          subAgentRole: ${{ parameters.subAgentRole }}
+          subAgentGoal: ${{ parameters.subAgentGoal }}
+          subAgentPort: ${{ parameters.subAgentPort }}
+          enableKnowledge: ${{ parameters.enableKnowledge }}
+          subAgentBackstory: ${{ parameters.subAgentBackstory }}
+          domain: ${{ parameters.domain }}
+          vaultRole: ${{ parameters.vaultRole if parameters.vaultRole else parameters.name }}
+
+    # Step 2: Render K8s manifests (deployments, secrets, ingress) into the
+    # workspace under k8s-manifests/. Files land inside base-apps/oncall-crewai/
+    # so they're managed by the existing oncall-crewai ArgoCD Application — no
+    # separate ArgoCD app is created.
+    - id: fetch-k8s-manifests
+      name: Render K8s Manifests
+      action: fetch:template
+      input:
+        url: ./content-k8s
+        targetPath: k8s-manifests
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          namespace: ${{ parameters.namespace }}
+          orchestratorPort: ${{ parameters.orchestratorPort }}
+          routingKeywords: ${{ parameters.routingKeywords }}
+          subAgentName: ${{ parameters.subAgentName }}
+          subAgentPythonName: ${{ parameters.subAgentName | replace("-", "_") }}
+          subAgentDisplayName: ${{ parameters.subAgentDisplayName }}
+          subAgentRole: ${{ parameters.subAgentRole }}
+          subAgentGoal: ${{ parameters.subAgentGoal }}
+          subAgentPort: ${{ parameters.subAgentPort }}
+          enableKnowledge: ${{ parameters.enableKnowledge }}
+          subAgentBackstory: ${{ parameters.subAgentBackstory }}
+          domain: ${{ parameters.domain }}
+          vaultRole: ${{ parameters.vaultRole if parameters.vaultRole else parameters.name }}
+          version: ${{ parameters.version }}
+
+    # Step 3 (production): Create ECR repositories for the Docker images.
+    # Idempotent — if repos already exist, their URIs are fetched and returned.
+    # Skipped in dry-run mode since no AWS resources should be created during testing.
+    - id: create-ecr-repos
+      name: Create ECR Repositories
+      if: ${{ not parameters.dryRun }}
+      action: aws:ecr:create
+      input:
+        projectName: ${{ parameters.name }}
+        subAgentName: ${{ parameters.subAgentName }}
+
+    # Step 4 (production): Provision Vault resources (policy, role, placeholder secrets).
+    # This eliminates the manual post-merge Vault setup. Safe to run multiple times
+    # (idempotent — all Vault API calls are create-or-update).
+    - id: vault-setup
+      name: Setup Vault (Policy + Role + Secrets)
+      if: ${{ not parameters.dryRun }}
+      action: vault:setup
+      input:
+        vaultRole: ${{ parameters.vaultRole if parameters.vaultRole else parameters.name }}
+        namespace: ${{ parameters.namespace }}
+        enableKnowledge: ${{ parameters.enableKnowledge }}
+
+    # Step 5 (production): Create PR for agent code in the claude-agents monorepo.
+    # IMPORTANT: This must happen BEFORE dispatching the build workflow, because
+    # the workflow checks out the PR branch to build the Docker images. The branch
+    # must exist on the remote before workflow_dispatch is called.
+    # sourcePath selects only the agent-code/ subdirectory from the workspace.
+    # targetPath places it as a new top-level directory in the monorepo (e.g., chores-knowledge-agent/).
+    - id: pr-agent-code
+      name: Create Agent Code PR
+      if: ${{ not parameters.dryRun }}
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=arigsela&repo=claude-agents
+        branchName: scaffolder/add-${{ parameters.name }}
+        title: 'feat: scaffold ${{ parameters.name }} agent'
+        description: |
+          ## New CrewAI Agent: ${{ parameters.name }}
+
+          ${{ parameters.description }}
+
+          Scaffolded by the Backstage CrewAI template.
+
+          ### Automated by scaffolder
+          - ECR repositories created automatically: `${{ parameters.name }}-orchestrator` and `${{ parameters.name }}-${{ parameters.subAgentName }}`
+          - Docker image build triggered via GitHub Actions workflow
+        sourcePath: agent-code
+        targetPath: ${{ parameters.name }}
+        update: true
+
+    # Step 6 (production): Trigger Docker image build via GitHub Actions.
+    # Replaces the old aws:ecr:build-push action which required Docker-in-Docker
+    # (impossible on EKS with containerd runtime — no Docker daemon in the pod).
+    # Uses the BUILT-IN github:actions:dispatch action from
+    # @backstage/plugin-scaffolder-backend-module-github (uses configured GitHub
+    # integration credentials — no separate GITHUB_TOKEN needed).
+    # The branchOrTagName targets `main` (where the workflow YAML lives),
+    # and the PR branch is passed as a workflow input.
+    # NOTE: This is fire-and-forget — it dispatches the build but does NOT wait
+    # for completion. Check the GitHub Actions tab for build status.
+    - id: dispatch-build
+      name: Trigger Docker Image Build (GitHub Actions)
+      if: ${{ not parameters.dryRun }}
+      action: github:actions:dispatch
+      input:
+        repoUrl: github.com?owner=arigsela&repo=claude-agents
+        workflowId: build-agent-images.yaml
+        branchOrTagName: main
+        workflowInputs:
+          project-name: ${{ parameters.name }}
+          sub-agent-name: ${{ parameters.subAgentName }}
+          version: ${{ parameters.version }}
+          branch: scaffolder/add-${{ parameters.name }}
+
+    # Step 7 (production): Create PR for K8s manifests in the kubernetes GitOps repo.
+    # Manifests land inside base-apps/oncall-crewai/{name}/ so they're synced by
+    # the existing oncall-crewai ArgoCD Application. No separate ArgoCD app created.
+    - id: pr-k8s-manifests
+      name: Create K8s Manifests PR
+      if: ${{ not parameters.dryRun }}
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=arigsela&repo=kubernetes
+        branchName: scaffolder/add-${{ parameters.name }}-manifests
+        title: 'feat: add ${{ parameters.name }} K8s manifests'
+        update: true
+        description: |
+          ## K8s Manifests for ${{ parameters.name }}
+
+          Deployment manifests for the ${{ parameters.name }} agent, placed inside
+          `base-apps/oncall-crewai/${{ parameters.name }}/` so they're managed by the
+          existing **oncall-crewai** ArgoCD Application. No separate ArgoCD app is created.
+
+          Scaffolded by the Backstage CrewAI template.
+
+          ### Vault (automated by scaffolder)
+          - Policy, K8s auth role, and placeholder secrets were created automatically
+          - **Post-merge**: replace placeholder secrets with real values at `k8s-secrets/data/${{ parameters.vaultRole if parameters.vaultRole else parameters.name }}`
+        sourcePath: k8s-manifests
+
+    # Step 8 (dry run): Write rendered files to local filesystem for testing.
+    # Both agent-code/ and k8s-manifests/ are written to /tmp for inspection.
+    - id: publish-local
+      name: Write to Local Filesystem (Dry Run)
+      if: ${{ parameters.dryRun }}
+      action: publish:file
+      input:
+        path: /tmp/backstage-scaffolder/${{ parameters.name }}
+
+  # ============================================================================
+  # OUTPUT — Links Shown After Completion
+  # ============================================================================
+  # These appear as clickable buttons/links on the success page.
+  # In production mode, shows links to both PRs.
+  # In dry run mode, shows the local filesystem path.
+  # ============================================================================
+
+  output:
+    links:
+      - title: Agent Code PR
+        url: ${{ steps['pr-agent-code'].output.remoteUrl }}
+      - title: K8s Manifests PR
+        url: ${{ steps['pr-k8s-manifests'].output.remoteUrl }}
+      - title: Docker Build (GitHub Actions)
+        url: https://github.com/arigsela/claude-agents/actions
+      - title: ECR — Orchestrator Repo
+        url: ${{ steps['create-ecr-repos'].output.orchestratorConsoleUrl }}
+      - title: ECR — Sub-Agent Repo
+        url: ${{ steps['create-ecr-repos'].output.subAgentConsoleUrl }}
+      - title: Dry Run Output
+        url: file:///tmp/backstage-scaffolder/${{ parameters.name }}

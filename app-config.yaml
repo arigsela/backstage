@@ -221,6 +221,14 @@ catalog:
       rules:
         - allow: [Template] # Only Template entities allowed from this location
 
+    # CrewAI multi-agent project template (see examples/templates/crewai-agent/template.yaml)
+    # This template scaffolds a new CrewAI agent project with orchestrator + sub-agents,
+    # Dockerfiles, K8s manifests, and Backstage catalog registration.
+    - type: file
+      target: ../../examples/templates/crewai-agent/template.yaml
+      rules:
+        - allow: [Template]
+
     # Example organizational data: users and groups (see examples/org.yaml)
     - type: file
       target: ../../examples/org.yaml

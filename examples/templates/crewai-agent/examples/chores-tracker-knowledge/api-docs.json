@@ -1,0 +1,131 @@
+{
+  "service": "chores-tracker-backend",
+  "base_url": "https://chores.arigsela.com/api/v1",
+  "framework": "FastAPI",
+  "version": "7.0.2",
+  "endpoints": {
+    "health": {
+      "path": "/health",
+      "method": "GET",
+      "description": "Container health check used by K8s liveness and readiness probes",
+      "auth_required": false,
+      "response": {"status": "ok"}
+    },
+    "healthcheck": {
+      "path": "/api/v1/healthcheck",
+      "method": "GET",
+      "description": "Application-level health check with dependency status",
+      "auth_required": false
+    },
+    "metrics": {
+      "path": "/metrics",
+      "method": "GET",
+      "description": "Prometheus metrics endpoint for monitoring",
+      "port": 8000,
+      "auth_required": false
+    },
+    "authentication": {
+      "login": {
+        "path": "/api/v1/auth/login",
+        "method": "POST",
+        "description": "Authenticate user and receive JWT token",
+        "request_body": {
+          "username": "string",
+          "password": "string"
+        },
+        "response": {
+          "access_token": "string (JWT)",
+          "token_type": "bearer"
+        }
+      },
+      "register": {
+        "path": "/api/v1/auth/register",
+        "method": "POST",
+        "description": "Register a new parent account",
+        "request_body": {
+          "username": "string",
+          "email": "string",
+          "password": "string"
+        }
+      }
+    },
+    "chores": {
+      "list": {
+        "path": "/api/v1/chores",
+        "method": "GET",
+        "description": "List all chores for the authenticated family",
+        "auth_required": true,
+        "query_params": {
+          "status": "pending|completed|all",
+          "assignee_id": "integer (optional)"
+        }
+      },
+      "create": {
+        "path": "/api/v1/chores",
+        "method": "POST",
+        "description": "Create a new chore (parent role required)",
+        "auth_required": true,
+        "roles": ["parent"],
+        "request_body": {
+          "name": "string",
+          "description": "string (optional)",
+          "reward_amount": "float",
+          "reward_type": "fixed|range",
+          "recurring": "boolean",
+          "cooldown_hours": "integer (optional, for recurring)",
+          "assignee_id": "integer (optional)"
+        }
+      },
+      "complete": {
+        "path": "/api/v1/chores/{chore_id}/complete",
+        "method": "POST",
+        "description": "Mark a chore as completed (child or parent)",
+        "auth_required": true
+      }
+    },
+    "family_members": {
+      "list": {
+        "path": "/api/v1/family/members",
+        "method": "GET",
+        "description": "List all family members",
+        "auth_required": true
+      },
+      "add_child": {
+        "path": "/api/v1/family/children",
+        "method": "POST",
+        "description": "Add a child account to the family (parent role required)",
+        "auth_required": true,
+        "roles": ["parent"],
+        "request_body": {
+          "name": "string",
+          "username": "string",
+          "password": "string"
+        }
+      }
+    },
+    "rewards": {
+      "balance": {
+        "path": "/api/v1/rewards/balance",
+        "method": "GET",
+        "description": "Get reward balance for a family member",
+        "auth_required": true
+      },
+      "history": {
+        "path": "/api/v1/rewards/history",
+        "method": "GET",
+        "description": "Get reward transaction history",
+        "auth_required": true
+      }
+    }
+  },
+  "authentication": {
+    "type": "JWT Bearer Token",
+    "header": "Authorization: Bearer <token>",
+    "roles": ["parent", "child"],
+    "token_lifetime": "configurable via SECRET_KEY env var"
+  },
+  "cors": {
+    "allowed_origins": ["https://chores.arigsela.com"],
+    "configurable_via": "BACKEND_CORS_ORIGINS environment variable"
+  }
+}
