@@ -70,7 +70,7 @@ def create_sub_agent_delegate() -> Agent:
                 location="header",     # Send API key in HTTP header
                 name="X-API-Key",      # Header name
             ),
-            timeout=120,               # Seconds to wait for sub-agent response
+            timeout=300,               # Seconds to wait for sub-agent response
             max_turns=10,              # Max back-and-forth exchanges
             trust_remote_completion_status=True,  # Accept sub-agent's "done" signal
         ),

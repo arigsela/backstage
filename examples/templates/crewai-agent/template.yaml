@@ -130,6 +130,30 @@ spec:
             The orchestrator uses keyword matching (not LLM) for fast, deterministic routing.
           ui:help: 'Example: chores, tasks, assignments, household, todo, schedule'
 
+        enableAuth:
+          title: Enable Authentication
+          type: boolean
+          description: >-
+            Add JWT + API key authentication with user management (register/login).
+            Includes bcrypt password hashing and SQLite user storage.
+          default: true
+
+        enableSessions:
+          title: Enable Session Persistence
+          type: boolean
+          description: >-
+            Add SQLite-backed conversation sessions with TTL expiration,
+            context injection, and background cleanup.
+          default: true
+
+        enableCopilotKit:
+          title: Enable CopilotKit (AG-UI)
+          type: boolean
+          description: >-
+            Add a /copilotkit SSE endpoint for CopilotKit frontend integration.
+            Requires ag-ui-protocol dependency.
+          default: false
+
     # --- WIZARD PAGE 3: Sub-Agent Configuration ---
     # Each sub-agent is an independent CrewAI agent with its own tools,
     # knowledge sources, and A2A endpoint.
@@ -307,6 +331,9 @@ spec:
           subAgentGoal: ${{ parameters.subAgentGoal }}
           subAgentPort: ${{ parameters.subAgentPort }}
           enableKnowledge: ${{ parameters.enableKnowledge }}
+          enableAuth: ${{ parameters.enableAuth }}
+          enableSessions: ${{ parameters.enableSessions }}
+          enableCopilotKit: ${{ parameters.enableCopilotKit }}
           subAgentBackstory: ${{ parameters.subAgentBackstory }}
           domain: ${{ parameters.domain }}
           vaultRole: ${{ parameters.vaultRole if parameters.vaultRole else parameters.name }}
@@ -335,6 +362,9 @@ spec:
           subAgentGoal: ${{ parameters.subAgentGoal }}
           subAgentPort: ${{ parameters.subAgentPort }}
           enableKnowledge: ${{ parameters.enableKnowledge }}
+          enableAuth: ${{ parameters.enableAuth }}
+          enableSessions: ${{ parameters.enableSessions }}
+          enableCopilotKit: ${{ parameters.enableCopilotKit }}
           subAgentBackstory: ${{ parameters.subAgentBackstory }}
           domain: ${{ parameters.domain }}
           vaultRole: ${{ parameters.vaultRole if parameters.vaultRole else parameters.name }}
@@ -362,6 +392,7 @@ spec:
         vaultRole: ${{ parameters.vaultRole if parameters.vaultRole else parameters.name }}
         namespace: ${{ parameters.namespace }}
         enableKnowledge: ${{ parameters.enableKnowledge }}
+        enableAuth: ${{ parameters.enableAuth }}
 
     # Step 5 (production): Create PR for agent code in the claude-agents monorepo.
     # IMPORTANT: This must happen BEFORE dispatching the build workflow, because

@@ -1,145 +1,110 @@
 # ==============================================================================
 # Orchestrator Flow — Query Classification & Routing
 # ==============================================================================
-#
-# WHAT IS A CREWAI FLOW?
-# A Flow is a deterministic state machine that orchestrates agent execution.
-# Unlike a Crew (which runs tasks sequentially or hierarchically), a Flow
-# gives you explicit control over the execution order via decorators:
-#
-#   @start()   — marks the first method to run
-#   @router()  — returns a route name that determines which method runs next
-#   @listen()  — runs when a specific route is selected
-#
-# WHY USE A FLOW INSTEAD OF A CREW?
-# The orchestrator's job is routing, not reasoning. A Flow gives us:
-# 1. Deterministic execution (keyword match → route → delegate)
-# 2. Zero LLM calls for routing (no wasted tokens on classification)
-# 3. Clear state management (OrchestratorFlowState tracks the full lifecycle)
-# 4. Easy to extend (add new @listen methods for new sub-agents)
-#
-# EXECUTION SEQUENCE:
-#   classify() → route_query() → handle_sub_agent() OR handle_no_match()
-# ==============================================================================
 {% raw %}
 import concurrent.futures
+import uuid
 
 from crewai import Crew, Task
 from crewai.flow.flow import Flow, start, router, listen
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from orchestrator.agents import create_sub_agent_delegate
-from orchestrator.prompts import ROUTING_KEYWORDS, NO_MATCH_RESPONSE
+from orchestrator.prompts import ROUTING_KEYWORDS
+from shared.config import CREWAI_VERBOSE, SINGLE_AGENT_BYPASS
 from shared.logging_config import setup_logging
 
 logger = setup_logging("orchestrator.flow")
 
+# Try to import @persist for flow resilience; degrade gracefully if unavailable
+try:
+    from crewai.flow.persistence import persist as _persist
+    _HAS_PERSIST = True
+except ImportError:
+    _HAS_PERSIST = False
+
 
 class OrchestratorFlowState(BaseModel):
+    """State that persists across all steps in the flow."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    query: str = ""
+    route: str = ""
+    result: str = ""
+
+
+def classify_query(query: str) -> str:
+    """Classify a query into a route based on keyword matching.
+
+    Returns "sub_agent" if keywords match or SINGLE_AGENT_BYPASS is enabled.
     """
-    State that persists across all steps in the flow.
+    if SINGLE_AGENT_BYPASS:
+        return "sub_agent"
 
-    Each @start/@router/@listen method can read and write to this state.
-    The state is created fresh for each flow.kickoff() call.
-    """
-    query: str = ""               # The user's original query
-    route: str = ""               # Which route was selected: "sub_agent" or "no_match"
-    result: str = ""              # The final response to return to the user
+    query_lower = query.lower()
+    matches = [kw for kw in ROUTING_KEYWORDS if kw in query_lower]
+    if matches:
+        logger.info(f"Keyword match: {matches[:5]} → routing to sub-agent")
+    else:
+        logger.info("No keyword match → defaulting to sub-agent")
+    return "sub_agent"
 
 
-class OrchestratorFlow(Flow[OrchestratorFlowState]):
-    """
-    Routes incoming queries to the appropriate sub-agent.
+def _build_flow_class():
+    class _OrchestratorFlow(Flow[OrchestratorFlowState]):
+        """Routes incoming queries to the appropriate sub-agent."""
 
-    The flow uses keyword matching (not LLM) for fast, deterministic routing.
-    """
+        initial_state = OrchestratorFlowState
 
-    @start()
-    def classify(self) -> str:
-        """
-        Step 1: Classify the query by checking for keyword matches.
+        @start()
+        def classify(self) -> str:
+            query = self.state.query
+            route = classify_query(query)
+            self.state.route = route
+            logger.info(f"Query classified: route={route}, query={query[:80]}...")
+            return route
 
-        This is the first method that runs (marked with @start).
-        It reads the query from state and checks if any routing keywords appear in it.
+        @router(classify)
+        def route_query(self) -> str:
+            return self.state.route or "sub_agent"
 
-        Returns:
-            A classification label used by the router.
-        """
-        query_lower = self.state.query.lower()
+        @listen("sub_agent")
+        def handle_sub_agent(self) -> str:
+            logger.info(f"Delegating to sub-agent: {self.state.query[:100]}")
+            try:
+                delegate = create_sub_agent_delegate()
+                task = Task(
+                    description=self.state.query,
+                    expected_output="A complete and helpful response to the user's query.",
+                    agent=delegate,
+                )
+                crew = Crew(
+                    agents=[delegate],
+                    tasks=[task],
+                    verbose=CREWAI_VERBOSE,
+                    output_log_file="/tmp/crewai-logs.txt",
+                )
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    result = pool.submit(crew.kickoff).result()
+                raw = result.raw if hasattr(result, "raw") else str(result)
+                self.state.result = raw.replace("\\n", "\n")
+            except Exception as e:
+                logger.error(f"Sub-agent delegation failed: {e}")
+                self.state.result = f"Agent error: {e}"
+            return self.state.result
 
-        # Count how many keywords match — more matches = higher confidence
-        matches = [kw for kw in ROUTING_KEYWORDS if kw in query_lower]
+    return _OrchestratorFlow
 
-        if matches:
-            logger.info(f"Keyword match: {matches[:5]} → routing to sub-agent")
-            self.state.route = "sub_agent"
-            return "sub_agent"
-        else:
-            logger.info("No keyword match → returning fallback response")
-            self.state.route = "no_match"
-            return "no_match"
 
-    @router(classify)
-    def route_query(self) -> str:
-        """
-        Step 2: Route based on the classification result.
-
-        Reads state.route (set by classify) and returns the route name,
-        which determines which @listen method runs next.
-
-        Returns:
-            Route name: "sub_agent" or "no_match"
-        """
-        return self.state.route or "no_match"
-
-    @listen("sub_agent")
-    def handle_sub_agent(self) -> str:
-        """
-        Step 3a: Delegate the query to the sub-agent via A2A.
-
-        This runs when route_query() returns "sub_agent".
-        It creates a delegate agent and runs a single-task Crew to invoke it.
-
-        IMPORTANT: crew.kickoff() is run in a ThreadPoolExecutor because
-        flow.kickoff() already owns the event loop (via asyncio.run()),
-        and crew.kickoff() also calls asyncio.run() internally. Running
-        in a separate thread gives it its own event loop.
-        """
-        logger.info(f"Delegating to sub-agent: {self.state.query[:100]}")
-
-        try:
-            # Create the A2A delegate agent
-            delegate = create_sub_agent_delegate()
-
-            # Create a task for the delegate — it will forward to the sub-agent via A2A
-            task = Task(
-                description=self.state.query,
-                expected_output="A complete and helpful response to the user's query.",
-                agent=delegate,
-            )
-
-            # Run the crew (single agent, single task)
-            crew = Crew(agents=[delegate], tasks=[task], verbose=True)
-
-            # Run in a separate thread to avoid nested asyncio.run() conflict
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                result = pool.submit(crew.kickoff).result()
-
-            self.state.result = result.raw if hasattr(result, "raw") else str(result)
-        except Exception as e:
-            logger.error(f"Sub-agent delegation failed: {e}")
-            self.state.result = f"Agent error: {e}"
-
-        return self.state.result
-
-    @listen("no_match")
-    def handle_no_match(self) -> str:
-        """
-        Step 3b: Return a helpful fallback when no keywords match.
-
-        This runs when route_query() returns "no_match".
-        Instead of failing, it tells the user what topics the agent can help with.
-        """
-        self.state.result = NO_MATCH_RESPONSE
-        return self.state.result
+# Apply @persist if available
+_FlowClass = _build_flow_class()
+if _HAS_PERSIST:
+    try:
+        OrchestratorFlow = _persist()(_FlowClass)
+        logger.info("Flow persistence enabled")
+    except Exception as e:
+        logger.warning(f"Failed to enable flow persistence: {e}")
+        OrchestratorFlow = _FlowClass
+else:
+    logger.info("Flow persistence not available")
+    OrchestratorFlow = _FlowClass
 {% endraw %}
