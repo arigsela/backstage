@@ -33,3 +33,11 @@ data:
   # Internal service DNS name for the sub-agent
   # Format: http://<service-name>.<namespace>.svc:<port>
   SUB_AGENT_URL: "http://${{ values.name }}-${{ values.subAgentName }}.${{ values.namespace }}.svc:${{ values.subAgentPort }}"
+  # CrewAI verbose logging (set to "false" in production to reduce log noise)
+  CREWAI_VERBOSE: "true"
+{%- if values.enableSessions %}
+  # Session persistence configuration
+  USERS_DB_PATH: "/data/users.db"
+  SESSION_DB_PATH: "/data/sessions.db"
+  SESSION_TTL_HOURS: "0"
+{%- endif %}

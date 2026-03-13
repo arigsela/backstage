@@ -87,6 +87,13 @@ spec:
                 secretKeyRef:
                   name: ${{ values.name }}-orchestrator-secrets
                   key: api-keys
+{%- if values.enableAuth %}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ${{ values.name }}-orchestrator-secrets
+                  key: jwt-secret
+{%- endif %}
 
           # Mount persistent storage for session data / CrewAI memory
           volumeMounts:

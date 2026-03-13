@@ -52,4 +52,20 @@ SUB_AGENT_URL = os.getenv(
 # "text" for local development (human-readable with timestamps)
 LOG_FORMAT = os.getenv("LOG_FORMAT", "text")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# --- CREWAI ---
+CREWAI_VERBOSE = os.getenv("CREWAI_VERBOSE", "true").lower() == "true"
+
+# --- SINGLE AGENT BYPASS ---
+# When True and there's only one sub-agent, skip keyword classification
+# and always route to the sub-agent directly.
+SINGLE_AGENT_BYPASS = os.getenv("SINGLE_AGENT_BYPASS", "true").lower() == "true"
 {% endraw %}
+{%- if values.enableAuth %}
+{% raw %}
+# --- AUTH ---
+JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
+JWT_EXPIRY_HOURS = int(os.getenv("JWT_EXPIRY_HOURS", "24"))
+USERS_DB_PATH = os.getenv("USERS_DB_PATH", "/data/users.db")
+{% endraw %}
+{%- endif %}
