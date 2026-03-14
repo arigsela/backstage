@@ -32,7 +32,9 @@ AGENT_GOAL = "${{ values.subAgentGoal }}"
 # The agent's backstory — this is the main prompt that shapes LLM behavior.
 # Populated from the "CrewAI Backstory (Prompt)" field in the template wizard.
 # Edit this to refine the agent's behavior as you add tools and knowledge sources.
-AGENT_BACKSTORY = """${{ values.subAgentBackstory }}"""
+AGENT_BACKSTORY = """
+${{ values.subAgentBackstory }}
+"""
 
 # Task description template — used when the orchestrator delegates a query.
 # The {query} placeholder is replaced with the actual user query at runtime.
