@@ -273,7 +273,7 @@ def create_app() -> FastAPI:
         return {
             "service": PROJECT_NAME,
             "role": "orchestrator",
-            "copilotkit": {% endraw %}{{ "True" if values.enableCopilotKit else "False" }}{% raw %},
+            "copilotkit": {% endraw %}${{ "True" if values.enableCopilotKit else "False" }}{% raw %},
             "sub_agents": [
                 {
                     "name": "{% endraw %}${{ values.subAgentName }}{% raw %}",
