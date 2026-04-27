@@ -219,6 +219,7 @@ backend.add(import('@backstage/plugin-permission-backend'));
 backend.add(
   import('@backstage/plugin-permission-backend-module-allow-all-policy'),
 );
+backend.add(import('@terasky/backstage-plugin-crossplane-permissions-backend'));
 
 /**
  * SEARCH
