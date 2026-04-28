@@ -3,7 +3,7 @@ apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: ${{ values.name }}
-  description: ${{ values.description | default("Managed via XApplication Composition") }}
+  description: ${{ (values.description | default("Managed via XApplication Composition", true)) | dump }}
   annotations:
     github.com/project-slug: arigsela/kubernetes
     backstage.io/kubernetes-id: ${{ values.name }}
