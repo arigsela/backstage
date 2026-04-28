@@ -1,0 +1,13 @@
+# XApplication (Crossplane) for ${{ values.name }}
+apiVersion: platform.arigsela.com/v1alpha1
+kind: XApplication
+metadata:
+  name: ${{ values.name }}
+  namespace: ${{ values.namespace }}
+spec:
+  image: ${{ values.image }}
+  host: ${{ values.host }}
+  port: ${{ values.port }}
+  replicas: ${{ values.replicas }}
+  dbNeeded: ${{ values.dbNeeded }}
+  dbStorage: ${{ values.dbStorage }}
