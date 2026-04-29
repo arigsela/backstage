@@ -33,13 +33,22 @@ organization:
 # --- BACKEND ---
 # Configuration for the Backstage backend server.
 backend:
-  # SERVICE-TO-SERVICE AUTH (commented out for dev):
-  # In production, backend plugins authenticate with each other using a shared secret.
-  # Without this, each backend restart generates new signing keys, breaking cross-service auth.
-  # TODO (Phase 7): Uncomment and set BACKEND_SECRET for production.
-  # auth:
-  #   keys:
-  #     - secret: ${BACKEND_SECRET}
+  # SERVICE-TO-SERVICE AUTH:
+  # Backstage v1.x's new backend system requires backend plugins to authenticate
+  # to each other when making internal API calls. With permission.enabled=true
+  # and no shared secret, scheduled-task plugins (like TeraSky's kubernetes-ingestor
+  # in v1.1) get 401 "Missing credentials" when calling /api/kubernetes/proxy/...
+  #
+  # `dangerouslyDisableDefaultAuthPolicy: true` is the documented escape hatch
+  # for single-process Backstage where all plugins run in one Node.js process —
+  # which is our homelab single-user case. For multi-process or multi-tenant
+  # production setups, switch to a real shared secret via:
+  #   auth:
+  #     keys:
+  #       - secret: ${BACKEND_SECRET}
+  # plus a Vault-backed BACKEND_SECRET in the K8s ExternalSecret + deployment env.
+  auth:
+    dangerouslyDisableDefaultAuthPolicy: true
 
   baseUrl: http://localhost:7007 # URL where the backend API is accessible
   listen:

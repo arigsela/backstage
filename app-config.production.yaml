@@ -27,6 +27,15 @@ app:
 
 # --- BACKEND ---
 backend:
+  # SERVICE-TO-SERVICE AUTH (mirrors base app-config):
+  # Backstage v1.x requires backend plugins to authenticate when calling each
+  # other internally. Without a shared secret, scheduled-task plugins (TeraSky's
+  # kubernetes-ingestor in v1.1) get 401 "Missing credentials" on internal
+  # /api/kubernetes/proxy/... calls. dangerouslyDisableDefaultAuthPolicy=true
+  # is the documented escape hatch for single-process homelab Backstage.
+  auth:
+    dangerouslyDisableDefaultAuthPolicy: true
+
   # The baseUrl must be reachable by all clients (browsers, other services).
   # This URL is used by the frontend to construct API requests to the backend.
   baseUrl: https://backstage.arigsela.com
