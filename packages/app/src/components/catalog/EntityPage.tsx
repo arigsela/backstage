@@ -58,6 +58,14 @@ import {
   isKubernetesAvailable,
 } from '@backstage/plugin-kubernetes';
 
+import {
+  CrossplaneResourceGraphSelector,
+  CrossplaneResourcesTableSelector,
+  IfCrossplaneResourceGraphAvailable,
+  IfCrossplaneResourcesListAvailable,
+  isCrossplaneAvailable,
+} from '@terasky/backstage-plugin-crossplane-resources-frontend';
+
 const techdocsContent = (
   <EntityTechdocsContent>
     <TechDocsAddons>
@@ -159,6 +167,25 @@ const serviceEntityPage = (
       if={isKubernetesAvailable}
     >
       <EntityKubernetesContent />
+    </EntityLayout.Route>
+
+    <EntityLayout.Route
+      path="/crossplane"
+      title="Crossplane"
+      if={isCrossplaneAvailable}
+    >
+      <Grid container spacing={3} alignItems="stretch">
+        <IfCrossplaneResourcesListAvailable>
+          <Grid item xs={12}>
+            <CrossplaneResourcesTableSelector />
+          </Grid>
+        </IfCrossplaneResourcesListAvailable>
+        <IfCrossplaneResourceGraphAvailable>
+          <Grid item xs={12}>
+            <CrossplaneResourceGraphSelector />
+          </Grid>
+        </IfCrossplaneResourceGraphAvailable>
+      </Grid>
     </EntityLayout.Route>
 
     <EntityLayout.Route path="/api" title="API">
