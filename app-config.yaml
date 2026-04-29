@@ -229,6 +229,13 @@ catalog:
       rules:
         - allow: [Template]
 
+    # Application (Crossplane) — onboard a container image as a managed app.
+    # See: examples/templates/application/template.yaml
+    - type: file
+      target: ../../examples/templates/application/template.yaml
+      rules:
+        - allow: [Template]
+
     # Example organizational data: users and groups (see examples/org.yaml)
     - type: file
       target: ../../examples/org.yaml

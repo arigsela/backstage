@@ -1,0 +1,17 @@
+# Backstage Component for ${{ values.name }}
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.name }}
+  description: ${{ (values.description | default("Managed via XApplication Composition", true)) | dump }}
+  annotations:
+    github.com/project-slug: arigsela/kubernetes
+    backstage.io/kubernetes-id: ${{ values.name }}
+  tags:
+    - crossplane
+    - xapplication
+spec:
+  type: service
+  lifecycle: experimental
+  owner: ${{ values.owner }}
+  system: platform
