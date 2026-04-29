@@ -105,17 +105,16 @@ spec:
           Database: ${{ parameters.dbNeeded }}
         targetPath: ""
 
-    - id: register
-      name: Register in catalog
-      action: catalog:register
-      input:
-        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
-        catalogInfoPath: /base-apps/${{ parameters.name }}/catalog-info.yaml
+  # NOTE: no catalog:register step here. `publish:github:pull-request` does NOT
+  # emit a `repoContentsUrl` output (only the direct-push `publish:github` does),
+  # and there's no clean URL we can register pre-merge — the catalog-info.yaml
+  # only exists on the feature branch until the PR merges. After merging, the
+  # operator manually imports via /catalog-import:
+  #   https://github.com/arigsela/kubernetes/blob/main/base-apps/<name>/catalog-info.yaml
+  # Future improvement: extend the GitHub catalog provider in app-config to scan
+  # `base-apps/*/catalog-info.yaml` so registration is fully automatic.
 
   output:
     links:
       - title: Pull request
         url: ${{ steps.publish.output.remoteUrl }}
-      - title: Catalog entry
-        icon: catalog
-        entityRef: ${{ steps.register.output.entityRef }}
