@@ -29,10 +29,6 @@ spec:
           title: Application name
           description: Lowercase, hyphenated. Used as namespace and resource prefix.
           pattern: "^[a-z][a-z0-9-]{2,38}[a-z0-9]$"
-        description:
-          type: string
-          title: Description
-          description: One-line summary shown in the Backstage catalog.
         owner:
           type: string
           title: Owner
@@ -83,7 +79,6 @@ spec:
         values:
           name: ${{ parameters.name }}
           namespace: ${{ parameters.name }}
-          description: ${{ parameters.description }}
           owner: ${{ parameters.owner }}
           image: ${{ parameters.image }}
           host: ${{ parameters.host }}
@@ -105,14 +100,11 @@ spec:
           Database: ${{ parameters.dbNeeded }}
         targetPath: ""
 
-  # NOTE: no catalog:register step here. `publish:github:pull-request` does NOT
-  # emit a `repoContentsUrl` output (only the direct-push `publish:github` does),
-  # and there's no clean URL we can register pre-merge — the catalog-info.yaml
-  # only exists on the feature branch until the PR merges. After merging, the
-  # operator manually imports via /catalog-import:
-  #   https://github.com/arigsela/kubernetes/blob/main/base-apps/<name>/catalog-info.yaml
-  # Future improvement: extend the GitHub catalog provider in app-config to scan
-  # `base-apps/*/catalog-info.yaml` so registration is fully automatic.
+  # NOTE: no catalog:register step here. The XApplication is rendered with
+  # terasky.backstage.io/* annotations (see content-k8s/.../application-xr.yaml).
+  # TeraSky's kubernetes-ingestor auto-ingests XRs as Backstage catalog entities
+  # within ~30-120s of the XR being applied — no manual /catalog-import step
+  # and no scaffolder catalog:register call needed.
 
   output:
     links:

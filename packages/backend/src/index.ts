@@ -104,6 +104,17 @@ backend.add(
 backend.add(import('./modules/scaffolder'));
 
 /**
+ * TERASKY SCAFFOLDER UTILITIES
+ * Provides additional scaffolder actions from TeraSky for working with
+ * Crossplane resources and Kubernetes manifests in scaffolder templates.
+ *
+ * See: https://github.com/TeraSky-OSS/backstage-plugins
+ */
+backend.add(
+  import('@terasky/backstage-plugin-scaffolder-backend-module-terasky-utils'),
+);
+
+/**
  * TECHDOCS
  * Renders Markdown documentation (via MkDocs) directly in Backstage.
  * Entities with `backstage.io/techdocs-ref` annotation get a "Docs" tab.
@@ -199,6 +210,16 @@ backend.add(import('@backstage/plugin-catalog-backend-module-logs'));
 backend.add(import('@backstage/plugin-catalog-backend-module-github'));
 
 /**
+ * TERASKY KUBERNETES INGESTOR (Catalog Provider)
+ * Discovers Kubernetes workloads (and Crossplane Claims/XRs) and ingests them
+ * into the Backstage catalog as Component/Resource entities automatically.
+ *
+ * Configured via `kubernetesIngestor:` in app-config.yaml.
+ * See: https://github.com/TeraSky-OSS/backstage-plugins
+ */
+backend.add(import('@terasky/backstage-plugin-kubernetes-ingestor'));
+
+/**
  * PERMISSIONS
  * Backstage has a built-in permissions framework for access control.
  *
@@ -254,6 +275,16 @@ backend.add(import('@backstage/plugin-search-backend-module-techdocs'));
  * Local dev: Run `kubectl proxy` in a separate terminal before starting Backstage.
  */
 backend.add(import('@backstage/plugin-kubernetes-backend'));
+
+/**
+ * TERASKY CROSSPLANE RESOURCES (Backend)
+ * Backend companion to the Crossplane resources frontend plugin. Exposes APIs
+ * for fetching Crossplane Claim/XR/composed-resource details so the entity
+ * page tab can render them.
+ *
+ * See: https://github.com/TeraSky-OSS/backstage-plugins
+ */
+backend.add(import('@terasky/backstage-plugin-crossplane-resources-backend'));
 
 /**
  * NOTIFICATIONS & SIGNALS

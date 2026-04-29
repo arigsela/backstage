@@ -322,3 +322,47 @@ kubernetes:
 # See: https://backstage.io/docs/permissions/getting-started
 permission:
   enabled: true # Set to false to completely disable permission checks
+
+# --- KUBERNETES INGESTOR (TeraSky) ---
+# The TeraSky kubernetes-ingestor backend plugin auto-ingests Kubernetes resources
+# as Backstage catalog entities. This is the engine behind the v1.1 IDP behaviors:
+#   - Crossplane XRDs are auto-converted into scaffolder Templates (Claim creation)
+#   - Crossplane Claims are auto-ingested as Component entities
+#   - Standard workloads can be opted in via the terasky.backstage.io/* annotations
+#
+# Schema reference: node_modules/@terasky/backstage-plugin-kubernetes-ingestor/config.d.ts
+# Plugin docs: https://terasky-oss.github.io/backstage-plugins/plugins/kubernetes-ingestor/overview
+kubernetesIngestor:
+  components:
+    # Workload component ingestion runs on a periodic schedule.
+    enabled: true
+    taskRunner:
+      frequency: 30   # seconds — how often to scan clusters for workloads
+      timeout: 600    # seconds — max time per scan run
+    # Only ingest workloads that explicitly opt in via terasky.backstage.io/* annotations.
+    # Prevents the catalog from filling up with every Deployment in every namespace.
+    onlyIngestAnnotatedResources: true
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - kube-node-lease
+  crossplane:
+    enabled: true
+    claims:
+      # Auto-ingest ALL Crossplane Claims as Component entities.
+      # No annotation required — every Claim in every cluster becomes a catalog entry.
+      ingestAllClaims: true
+    xrds:
+      enabled: true
+      # Auto-generate scaffolder Templates for ALL XRDs in the cluster.
+      # This is the core v1.1 behavior: each XRD = one self-service "Create" form.
+      ingestAllXRDs: true
+
+# --- CROSSPLANE (TeraSky frontend + backend) ---
+# Config for the TeraSky crossplane-resources frontend tab and backend plugin.
+# The backend plugin proxies through the kubernetes plugin to read MRs/Compositions.
+# The frontend renders the "Crossplane Resources" tab on Component entity pages.
+crossplane:
+  # Run permission framework checks on Crossplane UI actions.
+  # Requires permission.enabled: true above.
+  enablePermissions: true

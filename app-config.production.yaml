@@ -112,3 +112,33 @@ catalog:
       target: ./examples/org.yaml
       rules:
         - allow: [User, Group]
+
+# --- KUBERNETES INGESTOR (TeraSky) ---
+# Mirror of the base-config kubernetesIngestor block.
+# IMPORTANT: this section MUST be present in BOTH app-config.yaml AND this file.
+# Backstage's config layering merges objects but REPLACES arrays. To avoid the
+# v1 IDP regression where production silently dropped a top-level key, we restate
+# the full section here.
+kubernetesIngestor:
+  components:
+    enabled: true
+    taskRunner:
+      frequency: 30
+      timeout: 600
+    onlyIngestAnnotatedResources: true
+    excludedNamespaces:
+      - kube-system
+      - kube-public
+      - kube-node-lease
+  crossplane:
+    enabled: true
+    claims:
+      ingestAllClaims: true
+    xrds:
+      enabled: true
+      ingestAllXRDs: true
+
+# --- CROSSPLANE (TeraSky frontend + backend) ---
+# Same as app-config.yaml — restated here so the production overlay can't drop it.
+crossplane:
+  enablePermissions: true
