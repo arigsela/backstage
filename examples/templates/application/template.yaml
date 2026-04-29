@@ -29,10 +29,6 @@ spec:
           title: Application name
           description: Lowercase, hyphenated. Used as namespace and resource prefix.
           pattern: "^[a-z][a-z0-9-]{2,38}[a-z0-9]$"
-        description:
-          type: string
-          title: Description
-          description: One-line summary shown in the Backstage catalog.
         owner:
           type: string
           title: Owner
@@ -83,7 +79,6 @@ spec:
         values:
           name: ${{ parameters.name }}
           namespace: ${{ parameters.name }}
-          description: ${{ parameters.description }}
           owner: ${{ parameters.owner }}
           image: ${{ parameters.image }}
           host: ${{ parameters.host }}
