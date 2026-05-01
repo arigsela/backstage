@@ -58,6 +58,12 @@ spec:
           default: 2
           minimum: 1
           maximum: 10
+        healthCheckPath:
+          type: string
+          title: Health check path (optional)
+          description: HTTP path for liveness/readiness probes. Defaults to '/' which works for most images (nginx, generic web servers).
+          default: "/"
+          pattern: "^/.*"
 
     - title: Database (optional)
       properties:
@@ -77,15 +83,16 @@ spec:
       input:
         url: ./content-k8s
         values:
-          name: ${{ parameters.name }}
-          namespace: ${{ parameters.name }}
-          owner: ${{ parameters.owner }}
-          image: ${{ parameters.image }}
-          host: ${{ parameters.host }}
+          name: ${{ parameters.name | trim }}
+          namespace: ${{ parameters.name | trim }}
+          owner: ${{ parameters.owner | trim }}
+          image: ${{ parameters.image | trim }}
+          host: ${{ parameters.host | trim }}
+          healthCheckPath: ${{ parameters.healthCheckPath | trim }}
           port: ${{ parameters.port }}
           replicas: ${{ parameters.replicas }}
           dbNeeded: ${{ parameters.dbNeeded }}
-          dbStorage: ${{ parameters.dbStorage }}
+          dbStorage: ${{ parameters.dbStorage | trim }}
 
     - id: publish
       name: Open PR to arigsela/kubernetes

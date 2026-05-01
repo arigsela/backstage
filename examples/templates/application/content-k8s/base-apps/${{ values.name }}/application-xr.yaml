@@ -19,5 +19,8 @@ spec:
   host: ${{ values.host }}
   port: ${{ values.port }}
   replicas: ${{ values.replicas }}
+  {%- if values.healthCheckPath and values.healthCheckPath != "/" %}
+  healthCheckPath: ${{ values.healthCheckPath }}
+  {%- endif %}
   dbNeeded: ${{ values.dbNeeded }}
   dbStorage: ${{ values.dbStorage }}
