@@ -65,7 +65,7 @@ spec:
           default: "/"
           pattern: "^/.*"
 
-    - title: Database (optional)
+    - title: Resources (optional)
       properties:
         dbNeeded:
           type: boolean
@@ -75,6 +75,16 @@ spec:
           type: string
           title: Database storage size
           default: "1Gi"
+        s3Needed:
+          type: boolean
+          title: Provision an AWS S3 bucket (with dedicated IAM user)
+          description: |
+            When enabled, the platform creates an S3 bucket + IAM user + access
+            key for this app. Workload receives AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+            AWS_REGION, BUCKET_NAME env vars automatically (zero code changes — AWS SDK
+            auto-detects).
+            WARNING: bucket contents are deleted when the app is torn down (forceDestroy).
+          default: false
 
   steps:
     - id: fetch
@@ -93,6 +103,7 @@ spec:
           replicas: ${{ parameters.replicas }}
           dbNeeded: ${{ parameters.dbNeeded }}
           dbStorage: ${{ parameters.dbStorage | trim }}
+          s3Needed: ${{ parameters.s3Needed }}
 
     - id: publish
       name: Open PR to arigsela/kubernetes
