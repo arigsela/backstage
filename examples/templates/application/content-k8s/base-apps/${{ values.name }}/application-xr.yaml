@@ -24,3 +24,4 @@ spec:
   {%- endif %}
   dbNeeded: ${{ values.dbNeeded }}
   dbStorage: ${{ values.dbStorage }}
+  s3Needed: ${{ values.s3Needed }}
