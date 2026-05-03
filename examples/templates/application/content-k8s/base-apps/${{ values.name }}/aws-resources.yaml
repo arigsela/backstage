@@ -1,0 +1,143 @@
+{%- if values.s3Needed %}
+# AWS resources for ${{ values.name }} — provisioned via Crossplane provider-aws-s3
+# and provider-aws-iam (cluster-scoped resources, applied by ArgoCD).
+#
+# WARNING: bucket has forceDestroy:true — contents are permanently deleted on
+# teardown. The IAM user + access key are dedicated per-app (not shared).
+#
+# Cross-resource references via Crossplane label selectors (resolved at apply time
+# by the Crossplane controllers; no sync waves needed). Matches the existing
+# loki-aws-infrastructure / argo-workflows-aws-infrastructure pattern.
+
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: Bucket
+metadata:
+  name: ${{ values.bucketName }}
+  labels:
+    app.kubernetes.io/name: ${{ values.name }}
+    app.kubernetes.io/component: bucket
+    app.kubernetes.io/managed-by: crossplane
+  annotations:
+    terasky.backstage.io/add-to-catalog: "true"
+    terasky.backstage.io/owner: ${{ values.owner }}
+    terasky.backstage.io/component-type: service
+    terasky.backstage.io/lifecycle: experimental
+    terasky.backstage.io/system: platform
+    backstage.io/source-location: url:https://github.com/arigsela/kubernetes/tree/main/base-apps/${{ values.name }}
+spec:
+  forProvider:
+    region: us-east-2
+    forceDestroy: true
+  providerConfigRef:
+    name: default
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: User
+metadata:
+  name: ${{ values.name }}-app
+  labels:
+    app.kubernetes.io/name: ${{ values.name }}
+    app.kubernetes.io/component: iam-user
+    app.kubernetes.io/managed-by: crossplane
+  annotations:
+    terasky.backstage.io/add-to-catalog: "true"
+    terasky.backstage.io/owner: ${{ values.owner }}
+    terasky.backstage.io/component-type: service
+    terasky.backstage.io/lifecycle: experimental
+    terasky.backstage.io/system: platform
+    backstage.io/source-location: url:https://github.com/arigsela/kubernetes/tree/main/base-apps/${{ values.name }}
+spec:
+  forProvider:
+    tags:
+      ManagedBy: crossplane
+      App: ${{ values.name }}
+  providerConfigRef:
+    name: default
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Policy
+metadata:
+  name: ${{ values.name }}-s3-policy
+  labels:
+    app.kubernetes.io/name: ${{ values.name }}
+    app.kubernetes.io/component: iam-policy
+    app.kubernetes.io/managed-by: crossplane
+  annotations:
+    terasky.backstage.io/add-to-catalog: "true"
+    terasky.backstage.io/owner: ${{ values.owner }}
+    terasky.backstage.io/component-type: service
+    terasky.backstage.io/lifecycle: experimental
+    terasky.backstage.io/system: platform
+    backstage.io/source-location: url:https://github.com/arigsela/kubernetes/tree/main/base-apps/${{ values.name }}
+spec:
+  forProvider:
+    description: "S3 RW on ${{ values.name }}'s own bucket"
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [{
+          "Effect": "Allow",
+          "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
+          "Resource": [
+            "arn:aws:s3:::${{ values.bucketName }}",
+            "arn:aws:s3:::${{ values.bucketName }}/*"
+          ]
+        }]
+      }
+  providerConfigRef:
+    name: default
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: UserPolicyAttachment
+metadata:
+  name: ${{ values.name }}-s3-attachment
+  labels:
+    app.kubernetes.io/name: ${{ values.name }}
+    app.kubernetes.io/component: iam-policy-attachment
+    app.kubernetes.io/managed-by: crossplane
+  annotations:
+    terasky.backstage.io/add-to-catalog: "true"
+    terasky.backstage.io/owner: ${{ values.owner }}
+    terasky.backstage.io/component-type: service
+    terasky.backstage.io/lifecycle: experimental
+    terasky.backstage.io/system: platform
+    backstage.io/source-location: url:https://github.com/arigsela/kubernetes/tree/main/base-apps/${{ values.name }}
+spec:
+  forProvider:
+    policyArnSelector:
+      matchLabels:
+        app.kubernetes.io/name: ${{ values.name }}
+        app.kubernetes.io/component: iam-policy
+    userRef:
+      name: ${{ values.name }}-app
+  providerConfigRef:
+    name: default
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: AccessKey
+metadata:
+  name: ${{ values.name }}-app-key
+  labels:
+    app.kubernetes.io/name: ${{ values.name }}
+    app.kubernetes.io/component: access-key
+    app.kubernetes.io/managed-by: crossplane
+  annotations:
+    terasky.backstage.io/add-to-catalog: "true"
+    terasky.backstage.io/owner: ${{ values.owner }}
+    terasky.backstage.io/component-type: service
+    terasky.backstage.io/lifecycle: experimental
+    terasky.backstage.io/system: platform
+    backstage.io/source-location: url:https://github.com/arigsela/kubernetes/tree/main/base-apps/${{ values.name }}
+spec:
+  forProvider:
+    userSelector:
+      matchLabels:
+        app.kubernetes.io/name: ${{ values.name }}
+        app.kubernetes.io/component: iam-user
+  # Connection secret keys: attribute.id, attribute.secret, username
+  writeConnectionSecretToRef:
+    name: ${{ values.name }}-aws-key
+    namespace: ${{ values.name }}
+  providerConfigRef:
+    name: default
+{%- endif %}

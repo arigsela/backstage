@@ -104,6 +104,7 @@ spec:
           dbNeeded: ${{ parameters.dbNeeded }}
           dbStorage: ${{ parameters.dbStorage | trim }}
           s3Needed: ${{ parameters.s3Needed }}
+          bucketName: 852893458518-${{ parameters.name | trim }}
 
     - id: publish
       name: Open PR to arigsela/kubernetes
