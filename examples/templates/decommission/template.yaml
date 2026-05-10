@@ -1,24 +1,26 @@
 # examples/templates/decommission/template.yaml
-# Decommission Application (Crossplane) — renders teardown instructions for
-# a Crossplane-provisioned application. After running these commands, master-
-# app prunes the per-app Application post-merge; v1.4's
-# resources-finalizer.argocd.argoproj.io cascades AWS resource deletion.
-# User runs `kubectl delete namespace <name>` manually as the last step.
+# Decommission Application (Crossplane) — opens a teardown PR automatically
+# for a Crossplane-provisioned application.
 #
-# v1.4 LIMITATION: This template renders instructions only — it does NOT open
-# the PR automatically. Backstage's `publish:github:pull-request` action does
-# not natively support deleting files in the published PR (the `gitDeletePaths`
-# field assumed in the v1.4 spec turned out not to exist).
-# v1.4.1 will introduce a custom Backstage scaffolder action to fully automate.
+# v1.4.1: Uses the custom crossplane:teardown:open-decommission-pr scaffolder
+# action (see packages/backend/src/modules/scaffolder/decommissionPullRequestAction.ts).
+# The action verifies the app exists, creates a teardown branch, deletes
+# base-apps/<name>.yaml + base-apps/<name>/, and opens a PR — all via Octokit
+# REST API. Idempotent: re-running on the same app reuses the existing branch
+# and PR.
+#
+# Post-merge: v1.4's resources-finalizer.argocd.argoproj.io cascades AWS
+# resource deletion. User runs `kubectl delete namespace <name>` as the last
+# manual step.
 apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:
   name: decommission-application
   title: Decommission Application (Crossplane)
   description: >-
-    Renders the teardown commands for a Crossplane-provisioned application.
-    Run them locally to open the teardown PR; v1.4's ArgoCD finalizer then
-    cascades all managed resource deletion on merge.
+    Opens a teardown PR for a Crossplane-provisioned application automatically.
+    v1.4's ArgoCD finalizer cascades all managed resource deletion on merge.
+    Run `kubectl delete namespace <name>` as the last manual cleanup step.
   tags:
     - crossplane
     - kubernetes
@@ -38,38 +40,13 @@ spec:
           pattern: "^[a-z][a-z0-9-]{2,38}[a-z0-9]$"
 
   steps:
-    - id: log
-      name: Generate teardown instructions
-      action: debug:log
+    - id: publish
+      name: Open teardown PR
+      action: crossplane:teardown:open-decommission-pr
       input:
-        message: |
-          Teardown instructions generated for ${{ parameters.name | trim }}.
-          See the Output below for the commands to run locally.
+        name: ${{ parameters.name | trim }}
 
   output:
-    text:
-      - title: Teardown commands (run locally)
-        content: |
-          ```bash
-          # Run from your local arigsela/kubernetes clone:
-          git checkout main && git pull origin main
-          git checkout -b chore/teardown-${{ parameters.name | trim }}
-          git rm base-apps/${{ parameters.name | trim }}.yaml
-          git rm -r base-apps/${{ parameters.name | trim }}/
-          git commit -m "chore: tear down ${{ parameters.name | trim }} (decommission)"
-          git push -u origin chore/teardown-${{ parameters.name | trim }}
-
-          gh pr create --base main \
-            --title "chore: tear down ${{ parameters.name | trim }} (decommission)" \
-            --body "Decommissioning ${{ parameters.name | trim }}. After merge: master-app prunes the per-app Application; v1.4 finalizer cascades AWS resource deletion. Run \`kubectl delete namespace ${{ parameters.name | trim }}\` for the last manual cleanup step."
-          ```
-
-          After merging the PR:
-
-          1. master-app prunes the per-app Application within ~30s.
-          2. The v1.4 finalizer (`resources-finalizer.argocd.argoproj.io`)
-             cascades deletion of all managed resources (cluster-scoped AWS +
-             namespaced ESO config + composed app resources).
-          3. Wait ~60-90s for AWS-side resources to fully unwind.
-          4. Run `kubectl delete namespace ${{ parameters.name | trim }}` for
-             the last manual cleanup step.
+    links:
+      - title: Teardown PR
+        url: ${{ steps.publish.output.remoteUrl }}
