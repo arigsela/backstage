@@ -85,6 +85,30 @@ spec:
             auto-detects).
             WARNING: bucket contents are deleted when the app is torn down (forceDestroy).
           default: false
+        s3Versioning:
+          type: boolean
+          title: Enable bucket versioning
+          description: |
+            When enabled, the bucket retains all versions of objects.
+            Useful for recovery from accidental deletes/overwrites.
+          default: false
+        s3LifecycleDays:
+          type: integer
+          title: Bucket lifecycle (days until objects expire)
+          description: |
+            When > 0, S3 automatically deletes objects older than N days.
+            Common values: 7 (logs), 30 (build artifacts), 365 (compliance).
+            Set to 0 to disable lifecycle.
+          default: 0
+          minimum: 0
+        s3CorsEnabled:
+          type: boolean
+          title: Enable CORS (web app pattern)
+          description: |
+            When enabled, the bucket allows cross-origin browser access
+            with permissive defaults (all origins, common methods).
+            Useful for web apps loading assets directly from S3.
+          default: false
 
   steps:
     - id: fetch
@@ -104,6 +128,9 @@ spec:
           dbNeeded: ${{ parameters.dbNeeded }}
           dbStorage: ${{ parameters.dbStorage | trim }}
           s3Needed: ${{ parameters.s3Needed }}
+          s3Versioning: ${{ parameters.s3Versioning }}
+          s3LifecycleDays: ${{ parameters.s3LifecycleDays }}
+          s3CorsEnabled: ${{ parameters.s3CorsEnabled }}
           bucketName: 852893458518-${{ parameters.name | trim }}
 
     - id: publish

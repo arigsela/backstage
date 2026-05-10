@@ -140,4 +140,126 @@ spec:
     namespace: ${{ values.name }}
   providerConfigRef:
     name: default
+{%- if values.s3Versioning %}
+---
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: BucketVersioning
+metadata:
+  name: ${{ values.name }}-versioning
+  labels:
+    app.kubernetes.io/name: ${{ values.name }}
+    app.kubernetes.io/component: bucket-versioning
+    app.kubernetes.io/managed-by: crossplane
+  annotations:
+    terasky.backstage.io/add-to-catalog: "true"
+    terasky.backstage.io/owner: ${{ values.owner }}
+    terasky.backstage.io/component-type: service
+    terasky.backstage.io/lifecycle: experimental
+    terasky.backstage.io/system: platform
+    backstage.io/source-location: url:https://github.com/arigsela/kubernetes/tree/main/base-apps/${{ values.name }}
+spec:
+  forProvider:
+    region: us-east-2
+    bucketSelector:
+      matchLabels:
+        app.kubernetes.io/name: ${{ values.name }}
+        app.kubernetes.io/component: bucket
+    versioningConfiguration:
+      - status: Enabled
+  providerConfigRef:
+    name: default
+{%- endif %}
+{%- if values.s3LifecycleDays > 0 %}
+---
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: BucketLifecycleConfiguration
+metadata:
+  name: ${{ values.name }}-lifecycle
+  labels:
+    app.kubernetes.io/name: ${{ values.name }}
+    app.kubernetes.io/component: bucket-lifecycle
+    app.kubernetes.io/managed-by: crossplane
+  annotations:
+    terasky.backstage.io/add-to-catalog: "true"
+    terasky.backstage.io/owner: ${{ values.owner }}
+    terasky.backstage.io/component-type: service
+    terasky.backstage.io/lifecycle: experimental
+    terasky.backstage.io/system: platform
+    backstage.io/source-location: url:https://github.com/arigsela/kubernetes/tree/main/base-apps/${{ values.name }}
+spec:
+  forProvider:
+    region: us-east-2
+    bucketSelector:
+      matchLabels:
+        app.kubernetes.io/name: ${{ values.name }}
+        app.kubernetes.io/component: bucket
+    rule:
+      - id: expire-objects
+        status: Enabled
+        expiration:
+          - days: ${{ values.s3LifecycleDays }}
+  providerConfigRef:
+    name: default
+{%- endif %}
+{%- if values.s3CorsEnabled %}
+---
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: BucketCorsConfiguration
+metadata:
+  name: ${{ values.name }}-cors
+  labels:
+    app.kubernetes.io/name: ${{ values.name }}
+    app.kubernetes.io/component: bucket-cors
+    app.kubernetes.io/managed-by: crossplane
+  annotations:
+    terasky.backstage.io/add-to-catalog: "true"
+    terasky.backstage.io/owner: ${{ values.owner }}
+    terasky.backstage.io/component-type: service
+    terasky.backstage.io/lifecycle: experimental
+    terasky.backstage.io/system: platform
+    backstage.io/source-location: url:https://github.com/arigsela/kubernetes/tree/main/base-apps/${{ values.name }}
+spec:
+  forProvider:
+    region: us-east-2
+    bucketSelector:
+      matchLabels:
+        app.kubernetes.io/name: ${{ values.name }}
+        app.kubernetes.io/component: bucket
+    corsRule:
+      - allowedOrigins: ["*"]
+        allowedMethods: ["GET", "PUT", "POST", "DELETE", "HEAD"]
+        allowedHeaders: ["*"]
+        maxAgeSeconds: 3600
+  providerConfigRef:
+    name: default
+{%- endif %}
+---
+apiVersion: s3.aws.upbound.io/v1beta1
+kind: BucketPublicAccessBlock
+metadata:
+  name: ${{ values.name }}-pab
+  labels:
+    app.kubernetes.io/name: ${{ values.name }}
+    app.kubernetes.io/component: bucket-public-access-block
+    app.kubernetes.io/managed-by: crossplane
+  annotations:
+    terasky.backstage.io/add-to-catalog: "true"
+    terasky.backstage.io/owner: ${{ values.owner }}
+    terasky.backstage.io/component-type: service
+    terasky.backstage.io/lifecycle: experimental
+    terasky.backstage.io/system: platform
+    backstage.io/source-location: url:https://github.com/arigsela/kubernetes/tree/main/base-apps/${{ values.name }}
+spec:
+  forProvider:
+    region: us-east-2
+    bucketSelector:
+      matchLabels:
+        app.kubernetes.io/name: ${{ values.name }}
+        app.kubernetes.io/component: bucket
+    blockPublicAcls: true
+    blockPublicPolicy: true
+    ignorePublicAcls: true
+    restrictPublicBuckets: true
+  providerConfigRef:
+    name: default
 {%- endif %}

@@ -117,6 +117,13 @@ catalog:
       rules:
         - allow: [Template]
 
+    # Decommission Application (Crossplane) — tear down a managed app.
+    # See: examples/templates/decommission/template.yaml
+    - type: file
+      target: ./examples/templates/decommission/template.yaml
+      rules:
+        - allow: [Template]
+
     - type: file
       target: ./examples/org.yaml
       rules:
