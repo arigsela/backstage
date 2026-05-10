@@ -25,3 +25,12 @@ spec:
   dbNeeded: ${{ values.dbNeeded }}
   dbStorage: ${{ values.dbStorage }}
   s3Needed: ${{ values.s3Needed }}
+  {%- if values.s3Versioning %}
+  s3Versioning: ${{ values.s3Versioning }}
+  {%- endif %}
+  {%- if values.s3LifecycleDays > 0 %}
+  s3LifecycleDays: ${{ values.s3LifecycleDays }}
+  {%- endif %}
+  {%- if values.s3CorsEnabled %}
+  s3CorsEnabled: ${{ values.s3CorsEnabled }}
+  {%- endif %}
