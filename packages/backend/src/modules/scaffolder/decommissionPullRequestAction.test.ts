@@ -126,6 +126,17 @@ describe('crossplane:teardown:open-decommission-pr', () => {
       base: 'main',
       title: 'chore: tear down smoke-v141 (decommission)',
     }));
+    // v1.5: assert PR body includes Manual Vault cleanup section with the
+    // two specific `vault kv delete` commands operators run post-teardown.
+    expect(mock.pulls.create).toHaveBeenCalledWith(expect.objectContaining({
+      body: expect.stringContaining('Manual Vault cleanup (v1.5)'),
+    }));
+    expect(mock.pulls.create).toHaveBeenCalledWith(expect.objectContaining({
+      body: expect.stringContaining('vault kv delete k8s-secrets/smoke-v141/db-creds'),
+    }));
+    expect(mock.pulls.create).toHaveBeenCalledWith(expect.objectContaining({
+      body: expect.stringContaining('vault kv delete k8s-secrets/smoke-v141/aws-creds'),
+    }));
     expect(ctx.output).toHaveBeenCalledWith('remoteUrl', 'https://github.com/arigsela/kubernetes/pull/300');
     expect(ctx.output).toHaveBeenCalledWith('prNumber', 300);
     expect(ctx.output).toHaveBeenCalledWith('branchName', 'chore/teardown-smoke-v141');
