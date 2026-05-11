@@ -47,6 +47,7 @@
     "@backstage/plugin-search-backend-node": "^1.4.1",
     "@backstage/plugin-signals-backend": "^0.3.12",
     "@backstage/plugin-techdocs-backend": "^2.1.5",
+    "@octokit/rest": "^22.0.1",
     "@terasky/backstage-plugin-crossplane-resources-backend": "^1.15.0",
     "@terasky/backstage-plugin-kubernetes-ingestor": "^3.14.0",
     "@terasky/backstage-plugin-scaffolder-backend-module-terasky-utils": "^2.7.0",
