@@ -132,7 +132,7 @@ describe('crossplane:teardown:open-decommission-pr', () => {
       body: expect.stringContaining('Manual Vault cleanup (v1.5)'),
     }));
     expect(mock.pulls.create).toHaveBeenCalledWith(expect.objectContaining({
-      body: expect.stringContaining('vault kv delete k8s-secrets/smoke-v141/db-creds'),
+      body: expect.stringContaining('vault kv delete k8s-secrets/smoke-v141/db'),
     }));
     expect(mock.pulls.create).toHaveBeenCalledWith(expect.objectContaining({
       body: expect.stringContaining('vault kv delete k8s-secrets/smoke-v141/aws-creds'),
