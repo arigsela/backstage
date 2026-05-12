@@ -56,7 +56,7 @@ function buildPrBody(name: string): string {
     'deletionPolicy: Delete → None to fix a teardown race). After',
     'namespace deletion, run:',
     '',
-    '  kubectl exec -n vault vault-0 -- vault kv delete k8s-secrets/' + name + '/db-creds',
+    '  kubectl exec -n vault vault-0 -- vault kv delete k8s-secrets/' + name + '/db',
     '  kubectl exec -n vault vault-0 -- vault kv delete k8s-secrets/' + name + '/aws-creds',
     '',
     'Skip whichever entry does not exist (an app without dbNeeded won\'t',
