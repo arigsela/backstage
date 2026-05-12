@@ -53,7 +53,7 @@ function buildPrBody(name: string): string {
     '## Manual Vault cleanup (v1.5)',
     '',
     'PushSecret entries in Vault are NOT auto-deleted (v1.5 changed',
-    'deletionPolicy: Delete → Retain to fix a teardown race). After',
+    'deletionPolicy: Delete → None to fix a teardown race). After',
     'namespace deletion, run:',
     '',
     '  kubectl exec -n vault vault-0 -- vault kv delete k8s-secrets/' + name + '/db-creds',
