@@ -1,0 +1,49 @@
+# ==============================================================================
+# Kagent Declarative Agent — Decommission
+# ==============================================================================
+#
+# Opens a teardown PR that removes a Backstage-managed kagent Agent CRD.
+# Refuses to delete agents that don't carry the IDP-management label.
+#
+# Companion spec: docs/superpowers/specs/2026-05-18-kagent-idp-design.md
+# ==============================================================================
+
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: kagent-agent-decommission
+  title: Decommission Kagent Agent
+  description: >-
+    Opens a teardown PR that removes a Backstage-managed kagent Agent. Refuses
+    to delete agents that are not IDP-managed.
+  tags:
+    - kagent
+    - ai-agent
+    - decommission
+
+spec:
+  owner: group:platform-engineering
+  type: service
+
+  parameters:
+    - title: Identity
+      required: [name]
+      properties:
+        name:
+          type: string
+          title: Agent name to tear down
+          description: >-
+            Must match an existing IDP-managed agent under base-apps/kagent/agents/.
+          pattern: "^[a-z][a-z0-9-]{2,38}[a-z0-9]$"
+
+  steps:
+    - id: publish
+      name: Open teardown PR
+      action: kagent:agent:open-decommission-pr
+      input:
+        name: ${{ parameters.name | trim }}
+
+  output:
+    links:
+      - title: Teardown PR
+        url: ${{ steps.publish.output.remoteUrl }}
