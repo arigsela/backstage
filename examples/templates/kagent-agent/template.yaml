@@ -1,0 +1,251 @@
+# ==============================================================================
+# Kagent Declarative Agent — Backstage Software Template
+# ==============================================================================
+#
+# Self-service wizard for creating an orchestrator-style kagent.dev Agent.
+# Renders one Agent CRD YAML into base-apps/kagent/agents/<name>.yaml in the
+# arigsela/kubernetes repo. ArgoCD's `kagent-secrets` app auto-syncs the new
+# file with prune: true and selfHeal: true.
+#
+# Companion spec: docs/superpowers/specs/2026-05-18-kagent-idp-design.md
+# Wizard pages:
+#   1. Identity (name, description, owner)
+#   2. Behavior (systemMessage, includeBuiltinPrompts, delegateAgents)
+#   3. A2A Skills (optional, repeating)
+#   4. Resources (optional, all defaulted)
+#   5. Publish (dryRun toggle)
+# ==============================================================================
+
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: kagent-agent-template
+  title: Kagent Declarative Agent
+  description: >-
+    Scaffold a new orchestrator-style kagent.dev Agent. Renders a single
+    Agent CRD into base-apps/kagent/agents/<name>.yaml in the kubernetes
+    GitOps repo and opens a PR for review.
+  tags:
+    - kagent
+    - ai-agent
+    - recommended
+
+spec:
+  owner: group:platform-engineering
+  type: service
+
+  parameters:
+    # --- WIZARD PAGE 1: Identity ---
+    - title: Identity
+      required: [name, description, owner]
+      properties:
+        name:
+          title: Agent name
+          type: string
+          description: >-
+            Lowercase, hyphens, 4-40 chars. Becomes both the file name under
+            base-apps/kagent/agents/ and the CRD metadata.name.
+          pattern: "^[a-z][a-z0-9-]{2,38}[a-z0-9]$"
+          ui:autofocus: true
+          ui:help: "Example: release-coordinator"
+        description:
+          title: Description
+          type: string
+          description: One sentence describing what this agent does.
+          ui:options:
+            rows: 2
+        owner:
+          title: Owner
+          type: string
+          description: Backstage Group or User that owns this agent.
+          ui:field: EntityPicker
+          ui:options:
+            catalogFilter:
+              kind: [Group, User]
+
+    # --- WIZARD PAGE 2: Behavior ---
+    - title: Behavior
+      required: [systemMessage, delegateAgents]
+      properties:
+        systemMessage:
+          title: System message
+          type: string
+          description: >-
+            The agent's prompt. Can use builtin include directives if
+            "Include builtin prompts" is enabled below.
+          ui:widget: textarea
+          ui:options:
+            rows: 12
+          ui:help: >-
+            Example: "You are a release coordinator. Delegate helm work to
+            helm-agent, rollout management to argo-rollouts-conversion-agent,
+            and cluster checks to k8s-agent."
+        includeBuiltinPrompts:
+          title: Include builtin prompts (safety + k8s context)
+          type: boolean
+          description: >-
+            When enabled, the agent can use builtin include directives in
+            its system message to pull in shared snippets like
+            "builtin/kubernetes-context", "builtin/safety-guardrails", and
+            "builtin/tool-usage-best-practices" from the kagent-builtin-prompts
+            ConfigMap.
+          default: true
+        delegateAgents:
+          title: Delegate to these agents
+          type: array
+          description: >-
+            One or more agents this agent can delegate tasks to (A2A protocol).
+            Must select at least one.
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - k8s-agent
+              - helm-agent
+              - istio-agent
+              - kgateway-agent
+              - argo-rollouts-conversion-agent
+              - observability-agent
+          ui:widget: checkboxes
+
+    # --- WIZARD PAGE 3: A2A Skills (optional) ---
+    - title: A2A Skills (optional)
+      description: >-
+        Define A2A skill metadata so the kagent UI and other agents can
+        discover this agent's capabilities. Leave empty if you don't need
+        the agent to advertise itself.
+      properties:
+        skills:
+          title: Skills
+          type: array
+          default: []
+          items:
+            type: object
+            required: [id, name, description]
+            properties:
+              id:
+                type: string
+                title: Skill ID (kebab-case)
+                pattern: "^[a-z][a-z0-9-]*$"
+              name:
+                type: string
+                title: Display name
+              description:
+                type: string
+                title: Description (one sentence)
+              examples:
+                type: array
+                title: Example prompts
+                items:
+                  type: string
+              tags:
+                type: array
+                title: Tags
+                items:
+                  type: string
+
+    # --- WIZARD PAGE 4: Resources (optional, all defaulted) ---
+    - title: Resources (optional)
+      properties:
+        cpuRequest:
+          type: string
+          title: CPU request
+          default: "100m"
+        cpuLimit:
+          type: string
+          title: CPU limit
+          default: "1000m"
+        memoryRequest:
+          type: string
+          title: Memory request
+          default: "256Mi"
+        memoryLimit:
+          type: string
+          title: Memory limit
+          default: "1Gi"
+        compactionInterval:
+          type: integer
+          title: Compaction interval (turns)
+          default: 5
+          minimum: 1
+        overlapSize:
+          type: integer
+          title: Compaction overlap size (turns)
+          default: 2
+          minimum: 0
+
+    # --- WIZARD PAGE 5: Publish ---
+    - title: Publish
+      properties:
+        dryRun:
+          title: Dry run (testing mode)
+          type: boolean
+          description: >-
+            When enabled, writes the rendered YAML to /tmp/backstage-scaffolder/<name>/
+            instead of opening a PR. Use for testing the template.
+          default: false
+
+  steps:
+    # Step 1: Reject duplicate names BEFORE rendering or opening a PR.
+    - id: validate-name
+      name: Verify agent name is available
+      action: kagent:agent:validate-name
+      input:
+        name: ${{ parameters.name | trim }}
+
+    # Step 2: Render the Agent CRD into the workspace.
+    # The content/ directory mirrors the target repo's path structure exactly:
+    # content/base-apps/kagent/agents/${{ values.name }}.yaml → workspace/base-apps/kagent/agents/<name>.yaml
+    - id: fetch
+      name: Render manifest
+      action: fetch:template
+      input:
+        url: ./content
+        values:
+          name: ${{ parameters.name | trim }}
+          description: ${{ parameters.description | trim }}
+          owner: ${{ parameters.owner | trim }}
+          systemMessage: ${{ parameters.systemMessage }}
+          includeBuiltinPrompts: ${{ parameters.includeBuiltinPrompts }}
+          delegateAgents: ${{ parameters.delegateAgents }}
+          skills: ${{ parameters.skills }}
+          cpuRequest: ${{ parameters.cpuRequest | trim }}
+          cpuLimit: ${{ parameters.cpuLimit | trim }}
+          memoryRequest: ${{ parameters.memoryRequest | trim }}
+          memoryLimit: ${{ parameters.memoryLimit | trim }}
+          compactionInterval: ${{ parameters.compactionInterval }}
+          overlapSize: ${{ parameters.overlapSize }}
+
+    # Step 3 (production): Open PR against arigsela/kubernetes.
+    # No sourcePath / targetPath — workspace root maps to repo root (matches
+    # application-template pattern).
+    - id: publish
+      name: Open PR to arigsela/kubernetes
+      if: ${{ not parameters.dryRun }}
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=arigsela&repo=kubernetes
+        branchName: scaffolder/add-kagent-${{ parameters.name | trim }}
+        title: "feat(kagent): add ${{ parameters.name | trim }} agent"
+        description: |
+          Adds a new IDP-managed kagent.dev Agent: `${{ parameters.name | trim }}`.
+
+          ${{ parameters.description }}
+
+          Generated by Backstage `kagent-agent-template`.
+
+    # Step 4 (dry run): Write to /tmp for testing.
+    - id: publish-local
+      name: Write to local filesystem (dry run)
+      if: ${{ parameters.dryRun }}
+      action: publish:file
+      input:
+        path: /tmp/backstage-scaffolder/${{ parameters.name | trim }}
+
+  output:
+    links:
+      - title: Pull request
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Dry run output
+        url: file:///tmp/backstage-scaffolder/${{ parameters.name }}
