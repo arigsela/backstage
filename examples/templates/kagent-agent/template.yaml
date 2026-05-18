@@ -209,7 +209,7 @@ spec:
           systemMessage: ${{ parameters.systemMessage }}
           includeBuiltinPrompts: ${{ parameters.includeBuiltinPrompts }}
           delegateAgents: ${{ parameters.delegateAgents }}
-          skills: ${{ parameters.skills | dump }}
+          skills: ${{ parameters.skills }}
           cpuRequest: ${{ parameters.cpuRequest | trim }}
           cpuLimit: ${{ parameters.cpuLimit | trim }}
           memoryRequest: ${{ parameters.memoryRequest | trim }}

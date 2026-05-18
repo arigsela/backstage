@@ -33,11 +33,10 @@ spec:
         overlapSize: ${{ values.overlapSize }}
     systemMessage: |
       ${{ values.systemMessage | indent(6) }}
-{%- set skillsList = values.skills | parseJson %}
-{%- if skillsList | length > 0 %}
+{%- if values.skills | length > 0 %}
     a2aConfig:
       skills:
-{%- for skill in skillsList %}
+{%- for skill in values.skills %}
       - id: ${{ skill.id }}
         name: ${{ skill.name }}
         description: ${{ skill.description }}
