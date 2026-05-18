@@ -19,7 +19,7 @@ metadata:
     terasky.backstage.io/component-type: kagent-agent
     backstage.io/managed-by-location: url:https://github.com/arigsela/kubernetes/blob/main/base-apps/kagent/agents/${{ values.name }}.yaml
     backstage.io/owner: ${{ values.owner }}
-    arigsela.com/kagent-about: |
+    terasky.backstage.io/kagent-about: |
       # ${{ values.name }}
 
       ${{ values.description }}

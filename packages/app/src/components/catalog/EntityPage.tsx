@@ -79,7 +79,7 @@ const techdocsContent = (
 // =============================================================================
 // Kagent IDP v1.7 — "About this agent" card
 // =============================================================================
-// Renders the pre-baked arigsela.com/kagent-about annotation on the Overview
+// Renders the pre-baked terasky.backstage.io/kagent-about annotation on the Overview
 // tab for entities with spec.type = 'kagent-agent'. Returns null for any other
 // entity type or when the annotation is absent (e.g. older agents not yet
 // backfilled).
@@ -90,7 +90,7 @@ const techdocsContent = (
 //
 // Companion spec: arigsela/kubernetes:docs/superpowers/specs/2026-05-18-kagent-idp-v1.7-design.md
 
-const KAGENT_ABOUT_ANNOTATION = 'arigsela.com/kagent-about';
+const KAGENT_ABOUT_ANNOTATION = 'terasky.backstage.io/kagent-about';
 
 const isKagentAgent = (entity: Entity): boolean =>
   entity?.spec?.type === 'kagent-agent';
