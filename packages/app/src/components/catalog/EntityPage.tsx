@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Button, Grid } from '@material-ui/core';
 import {
   EntityApiDefinitionCard,
@@ -58,7 +59,9 @@ import { ReportIssue } from '@backstage/plugin-techdocs-module-addons-contrib';
 import {
   EntityKubernetesContent,
   isKubernetesAvailable,
+  kubernetesApiRef,
 } from '@backstage/plugin-kubernetes';
+import { useApi } from '@backstage/core-plugin-api';
 
 import {
   CrossplaneResourceGraphSelector,
@@ -79,30 +82,200 @@ const techdocsContent = (
 // =============================================================================
 // Kagent IDP v1.7 — "About this agent" card
 // =============================================================================
-// Renders the pre-baked terasky.backstage.io/kagent-about annotation on the Overview
-// tab for entities with spec.type = 'kagent-agent'. Returns null for any other
-// entity type or when the annotation is absent (e.g. older agents not yet
-// backfilled).
-//
-// Pattern: EntitySwitch outside, Grid item INSIDE the matching case. This is
-// the convention `entityWarningContent` uses below — keeps the Grid container
-// flat for non-matching entities (no empty Grid item leaks).
+// Renders a Markdown summary of a kagent.dev/v1alpha2 Agent on the entity
+// Overview tab. Fetches the live Agent CRD via the Backstage Kubernetes plugin
+// proxy (the annotation-based approach was abandoned — kagent controller drops
+// multi-line annotations during Deployment creation, breaking the propagation
+// chain to TeraSky's kubernetes-ingestor).
 //
 // Companion spec: arigsela/kubernetes:docs/superpowers/specs/2026-05-18-kagent-idp-v1.7-design.md
-
-const KAGENT_ABOUT_ANNOTATION = 'terasky.backstage.io/kagent-about';
 
 const isKagentAgent = (entity: Entity): boolean =>
   entity?.spec?.type === 'kagent-agent';
 
+interface KagentSkill {
+  id: string;
+  name: string;
+  description: string;
+  examples?: string[];
+  tags?: string[];
+}
+
+interface KagentAgentSpec {
+  description?: string;
+  declarative?: {
+    modelConfig?: string;
+    memory?: { modelConfig?: string };
+    systemMessage?: string;
+    a2aConfig?: { skills?: KagentSkill[] };
+    tools?: Array<{ type: string; agent?: { name: string } }>;
+    context?: { compaction?: { compactionInterval?: number; overlapSize?: number } };
+    deployment?: {
+      resources?: {
+        requests?: { cpu?: string; memory?: string };
+        limits?: { cpu?: string; memory?: string };
+      };
+    };
+    promptTemplate?: unknown;
+  };
+}
+
+const DELEGATE_DESCRIPTIONS: Record<string, string> = {
+  'k8s-agent':
+    'Kubernetes cluster operations (pods, deployments, RBAC, troubleshooting)',
+  'helm-agent':
+    'Helm release lifecycle (install/upgrade/rollback, chart inspection)',
+  'istio-agent': 'Istio service-mesh configuration and traffic management',
+  'kgateway-agent': 'Kubernetes Gateway API (kgateway/Envoy)',
+  'argo-rollouts-conversion-agent':
+    'Convert Deployments to Argo Rollouts for progressive delivery',
+  'observability-agent':
+    'Prometheus + Grafana metrics and dashboard management',
+};
+
+const buildKagentMarkdown = (
+  entityName: string,
+  spec: KagentAgentSpec,
+): string => {
+  const decl = spec.declarative || {};
+  const skills = decl.a2aConfig?.skills || [];
+  const delegates = (decl.tools || [])
+    .filter(t => t.type === 'Agent' && t.agent?.name)
+    .map(t => t.agent!.name);
+  const compaction = decl.context?.compaction;
+  const resources = decl.deployment?.resources;
+
+  const lines: string[] = [`# ${entityName}`, ''];
+  if (spec.description) lines.push(spec.description, '');
+  lines.push('## Purpose', '', decl.systemMessage || '(no system message defined)');
+
+  if (skills.length > 0) {
+    lines.push('', '## Skills');
+    for (const skill of skills) {
+      lines.push('', `### ${skill.name} (\`${skill.id}\`)`, '', skill.description);
+      if (skill.examples?.length) {
+        lines.push('', '**Examples:**');
+        for (const ex of skill.examples) lines.push(`- ${ex}`);
+      }
+      if (skill.tags?.length) {
+        lines.push('', `**Tags:** ${skill.tags.map(t => `\`${t}\``).join(', ')}`);
+      }
+    }
+  }
+
+  if (delegates.length > 0) {
+    lines.push(
+      '',
+      '## Delegates to',
+      '',
+      'This agent can delegate tasks to the following agents:',
+    );
+    for (const d of delegates) {
+      lines.push(`- **${d}** — ${DELEGATE_DESCRIPTIONS[d] || '(see kagent docs)'}`);
+    }
+  }
+
+  lines.push('', '## Configuration', '', '| Setting | Value |', '|---|---|');
+  if (decl.modelConfig) lines.push(`| Model | \`${decl.modelConfig}\` |`);
+  if (decl.memory?.modelConfig)
+    lines.push(`| Memory model | \`${decl.memory.modelConfig}\` |`);
+  if (compaction) {
+    lines.push(
+      `| Compaction interval | ${compaction.compactionInterval} turns |`,
+      `| Compaction overlap | ${compaction.overlapSize} turns |`,
+    );
+  }
+  if (resources) {
+    lines.push(
+      `| CPU | ${resources.requests?.cpu || '?'} / ${resources.limits?.cpu || '?'} (req/lim) |`,
+      `| Memory | ${resources.requests?.memory || '?'} / ${resources.limits?.memory || '?'} (req/lim) |`,
+    );
+  }
+  lines.push(
+    `| Built-in prompts | ${decl.promptTemplate ? 'included' : 'not included'} |`,
+  );
+
+  lines.push(
+    '',
+    '## Manage',
+    '',
+    `- **Edit:** hand-edit \`base-apps/kagent/agents/${entityName}.yaml\` and open a PR`,
+    `- **Decommission:** use the **Decommission Kagent Agent** template in Backstage`,
+  );
+
+  return lines.join('\n');
+};
+
 const KagentAboutCardContent = () => {
   const { entity } = useEntity();
-  const about = entity.metadata.annotations?.[KAGENT_ABOUT_ANNOTATION];
-  if (!about) return null;
+  const kubernetesApi = useApi(kubernetesApiRef);
+  const [spec, setSpec] = useState<KagentAgentSpec | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const ann = entity.metadata.annotations || {};
+    const name = ann['terasky.backstage.io/kubernetes-resource-name'];
+    const namespace = ann['terasky.backstage.io/kubernetes-resource-namespace'];
+    const apiVersion =
+      ann['terasky.backstage.io/kubernetes-resource-api-version'];
+
+    if (!name || !namespace || apiVersion !== 'kagent.dev/v1alpha2') {
+      setError(
+        'Entity is missing the terasky.backstage.io/kubernetes-resource-* annotations needed to locate the Agent CRD',
+      );
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    kubernetesApi
+      .proxy({
+        clusterName: 'homelab',
+        path: `/apis/${apiVersion}/namespaces/${namespace}/agents/${name}`,
+      })
+      .then(res => {
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        return res.json();
+      })
+      .then((data: { spec?: KagentAgentSpec }) => {
+        if (cancelled) return;
+        setSpec(data.spec || {});
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : String(err));
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [entity, kubernetesApi]);
+
+  if (loading) {
+    return (
+      <Grid item xs={12}>
+        <InfoCard title="About this agent">
+          <em>Loading agent details from cluster…</em>
+        </InfoCard>
+      </Grid>
+    );
+  }
+  if (error || !spec) {
+    return (
+      <Grid item xs={12}>
+        <InfoCard title="About this agent">
+          <em>Could not load agent details: {error || 'unknown error'}</em>
+        </InfoCard>
+      </Grid>
+    );
+  }
+
   return (
     <Grid item xs={12}>
       <InfoCard title="About this agent">
-        <MarkdownContent content={about} />
+        <MarkdownContent content={buildKagentMarkdown(entity.metadata.name, spec)} />
       </InfoCard>
     </Grid>
   );
