@@ -18,6 +18,8 @@
  * - aws:ecr:build-push — Builds Docker images and pushes them to ECR (legacy, kept for compat)
  * - vault:setup — Creates Vault policy, K8s auth role, and placeholder secrets
  * - crossplane:teardown:open-decommission-pr — Opens a teardown PR for a v1.x IDP app
+ * - kagent:agent:validate-name — Fails the wizard on kagent agent name collisions
+ * - kagent:agent:open-decommission-pr — Opens a teardown PR for an IDP-managed kagent Agent
  *
  * NOTE: github:actions:dispatch is provided by the built-in
  * @backstage/plugin-scaffolder-backend-module-github package — no custom
@@ -31,6 +33,8 @@ import { createEcrCreateAction } from './ecrCreateAction';
 import { createEcrBuildPushAction } from './ecrBuildPushAction';
 import { createVaultSetupAction } from './vaultSetupAction';
 import { createDecommissionPullRequestAction } from './decommissionPullRequestAction';
+import { createKagentValidateNameAction } from './kagentValidateNameAction';
+import { createKagentDecommissionAction } from './kagentDecommissionAction';
 
 
 /**
@@ -60,6 +64,8 @@ const scaffolderCustomActionsModule = createBackendModule({
           createEcrBuildPushAction(),
           createVaultSetupAction(),
           createDecommissionPullRequestAction(),
+          createKagentValidateNameAction(),
+          createKagentDecommissionAction(),
         );
       },
     });
