@@ -1,0 +1,71 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: ${{ values.name }}
+  namespace: kagent
+  labels:
+    app.kubernetes.io/part-of: kagent
+    app.kubernetes.io/managed-by: backstage-scaffolder
+  annotations:
+    terasky.backstage.io/add-to-catalog: "true"
+    terasky.backstage.io/component-type: kagent-agent
+    backstage.io/managed-by-location: url:https://github.com/arigsela/kubernetes/blob/main/base-apps/kagent/agents/${{ values.name }}.yaml
+    backstage.io/owner: ${{ values.owner }}
+spec:
+  description: ${{ values.description }}
+  type: Declarative
+  declarative:
+    modelConfig: default-model-config
+    memory:
+      modelConfig: embedding-model-config
+    runtime: python
+    stream: true
+{%- if values.includeBuiltinPrompts %}
+    promptTemplate:
+      dataSources:
+      - alias: builtin
+        kind: ConfigMap
+        name: kagent-builtin-prompts
+{%- endif %}
+    context:
+      compaction:
+        compactionInterval: ${{ values.compactionInterval }}
+        overlapSize: ${{ values.overlapSize }}
+    systemMessage: |
+      ${{ values.systemMessage | indent(6) }}
+{%- set skillsList = values.skills | parseJson %}
+{%- if skillsList | length > 0 %}
+    a2aConfig:
+      skills:
+{%- for skill in skillsList %}
+      - id: ${{ skill.id }}
+        name: ${{ skill.name }}
+        description: ${{ skill.description }}
+{%- if skill.examples and skill.examples | length > 0 %}
+        examples:
+{%- for example in skill.examples %}
+        - ${{ example }}
+{%- endfor %}
+{%- endif %}
+{%- if skill.tags and skill.tags | length > 0 %}
+        tags:
+{%- for tag in skill.tags %}
+        - ${{ tag }}
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+    tools:
+{%- for agentName in values.delegateAgents %}
+    - type: Agent
+      agent:
+        name: ${{ agentName }}
+{%- endfor %}
+    deployment:
+      resources:
+        requests:
+          cpu: ${{ values.cpuRequest }}
+          memory: ${{ values.memoryRequest }}
+        limits:
+          cpu: ${{ values.cpuLimit }}
+          memory: ${{ values.memoryLimit }}
