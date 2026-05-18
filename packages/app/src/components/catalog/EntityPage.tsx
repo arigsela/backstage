@@ -27,6 +27,7 @@ import {
   hasRelationWarnings,
   EntityRelationWarning,
 } from '@backstage/plugin-catalog';
+import { useEntity } from '@backstage/plugin-catalog-react';
 import {
   EntityUserProfileCard,
   EntityGroupProfileCard,
@@ -34,12 +35,13 @@ import {
   EntityOwnershipCard,
 } from '@backstage/plugin-org';
 import { EntityTechdocsContent } from '@backstage/plugin-techdocs';
-import { EmptyState } from '@backstage/core-components';
+import { EmptyState, InfoCard, MarkdownContent } from '@backstage/core-components';
 import {
   Direction,
   EntityCatalogGraphCard,
 } from '@backstage/plugin-catalog-graph';
 import {
+  Entity,
   RELATION_API_CONSUMED_BY,
   RELATION_API_PROVIDED_BY,
   RELATION_CONSUMES_API,
@@ -72,6 +74,46 @@ const techdocsContent = (
       <ReportIssue />
     </TechDocsAddons>
   </EntityTechdocsContent>
+);
+
+// =============================================================================
+// Kagent IDP v1.7 — "About this agent" card
+// =============================================================================
+// Renders the pre-baked arigsela.com/kagent-about annotation on the Overview
+// tab for entities with spec.type = 'kagent-agent'. Returns null for any other
+// entity type or when the annotation is absent (e.g. older agents not yet
+// backfilled).
+//
+// Pattern: EntitySwitch outside, Grid item INSIDE the matching case. This is
+// the convention `entityWarningContent` uses below — keeps the Grid container
+// flat for non-matching entities (no empty Grid item leaks).
+//
+// Companion spec: arigsela/kubernetes:docs/superpowers/specs/2026-05-18-kagent-idp-v1.7-design.md
+
+const KAGENT_ABOUT_ANNOTATION = 'arigsela.com/kagent-about';
+
+const isKagentAgent = (entity: Entity): boolean =>
+  entity?.spec?.type === 'kagent-agent';
+
+const KagentAboutCardContent = () => {
+  const { entity } = useEntity();
+  const about = entity.metadata.annotations?.[KAGENT_ABOUT_ANNOTATION];
+  if (!about) return null;
+  return (
+    <Grid item xs={12}>
+      <InfoCard title="About this agent">
+        <MarkdownContent content={about} />
+      </InfoCard>
+    </Grid>
+  );
+};
+
+const kagentAboutCard = (
+  <EntitySwitch>
+    <EntitySwitch.Case if={isKagentAgent}>
+      <KagentAboutCardContent />
+    </EntitySwitch.Case>
+  </EntitySwitch>
 );
 
 const cicdContent = (
@@ -141,6 +183,8 @@ const overviewContent = (
     <Grid item md={6} xs={12}>
       <EntityCatalogGraphCard variant="gridItem" height={400} />
     </Grid>
+
+    {kagentAboutCard}
 
     <Grid item md={4} xs={12}>
       <EntityLinksCard />
