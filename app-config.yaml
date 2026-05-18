@@ -252,6 +252,20 @@ catalog:
       rules:
         - allow: [Template]
 
+    # Kagent Declarative Agent — create new kagent.dev orchestrator-style agents.
+    # See: examples/templates/kagent-agent/template.yaml
+    - type: file
+      target: ../../examples/templates/kagent-agent/template.yaml
+      rules:
+        - allow: [Template]
+
+    # Decommission Kagent Agent — tear down an IDP-managed kagent agent.
+    # See: examples/templates/kagent-agent-decommission/template.yaml
+    - type: file
+      target: ../../examples/templates/kagent-agent-decommission/template.yaml
+      rules:
+        - allow: [Template]
+
     # Example organizational data: users and groups (see examples/org.yaml)
     - type: file
       target: ../../examples/org.yaml
