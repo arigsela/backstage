@@ -370,6 +370,31 @@ const overviewContent = (
   </Grid>
 );
 
+// kagent IDP v1.8: dedicated 3-tab layout (Overview / Kubernetes / Docs)
+// for entities with spec.type='kagent-agent'. The Kubernetes tab shows
+// the kagent-controller-spawned workload (Pod/Deployment/Service) plus
+// the Agent CRD itself in the Custom Resources panel (configured via
+// kubernetes.customResources in app-config).
+const kagentAgentPage = (
+  <EntityLayout>
+    <EntityLayout.Route path="/" title="Overview">
+      {overviewContent}
+    </EntityLayout.Route>
+
+    <EntityLayout.Route
+      path="/kubernetes"
+      title="Kubernetes"
+      if={isKubernetesAvailable}
+    >
+      <EntityKubernetesContent />
+    </EntityLayout.Route>
+
+    <EntityLayout.Route path="/docs" title="Docs">
+      {techdocsContent}
+    </EntityLayout.Route>
+  </EntityLayout>
+);
+
 const serviceEntityPage = (
   <EntityLayout>
     <EntityLayout.Route path="/" title="Overview">
@@ -497,6 +522,10 @@ const componentPage = (
 
     <EntitySwitch.Case if={isComponentType('website')}>
       {websiteEntityPage}
+    </EntitySwitch.Case>
+
+    <EntitySwitch.Case if={isComponentType('kagent-agent')}>
+      {kagentAgentPage}
     </EntitySwitch.Case>
 
     <EntitySwitch.Case>{defaultEntityPage}</EntitySwitch.Case>

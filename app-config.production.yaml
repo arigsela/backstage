@@ -172,3 +172,15 @@ kubernetesIngestor:
 # Same as app-config.yaml — restated here so the production overlay can't drop it.
 crossplane:
   enablePermissions: true
+
+# --- KUBERNETES (v1.8) ---
+# Mirror of the customResources entry from app-config.yaml so the kagent.dev
+# Agent CRD is fetched for entity-page Kubernetes tabs. Backstage's config
+# layering MERGES objects but REPLACES arrays — and we want this entry
+# present regardless of which config layer wins. (v1.6 lesson — same pattern
+# as catalog.locations and kubernetesIngestor.)
+kubernetes:
+  customResources:
+    - group: 'kagent.dev'
+      apiVersion: 'v1alpha2'
+      plural: 'agents'

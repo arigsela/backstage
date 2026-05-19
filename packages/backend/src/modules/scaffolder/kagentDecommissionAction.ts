@@ -29,8 +29,8 @@ import { Octokit } from '@octokit/rest';
 const OWNER = 'arigsela';
 const REPO = 'kubernetes';
 const BASE_BRANCH = 'main';
-const MANAGED_BY_LABEL = 'app.kubernetes.io/managed-by';
-const MANAGED_BY_VALUE = 'backstage-scaffolder';
+const IDP_MANAGED_LABEL = 'arigsela.com/idp-managed';
+const IDP_MANAGED_VALUE = 'true';
 
 function isHttpError(err: unknown): err is { status: number; message?: string } {
   return (
@@ -47,9 +47,9 @@ function isHttpError(err: unknown): err is { status: number; message?: string } 
  * the check tolerant of minor formatting variations (quoted/unquoted value).
  * Our scaffolder always renders the label in a predictable form.
  */
-function hasManagedByLabel(yamlBody: string): boolean {
+function isIdpManaged(yamlBody: string): boolean {
   const pattern = new RegExp(
-    `${MANAGED_BY_LABEL.replace(/\./g, '\\.').replace(/\//g, '\\/')}:\\s*["']?${MANAGED_BY_VALUE}["']?`,
+    `${IDP_MANAGED_LABEL.replace(/\./g, '\\.').replace(/\//g, '\\/')}:\\s*["']?${IDP_MANAGED_VALUE}["']?`,
   );
   return pattern.test(yamlBody);
 }
@@ -139,9 +139,9 @@ export function createKagentDecommissionAction() {
         );
       }
 
-      if (!hasManagedByLabel(yamlBody)) {
+      if (!isIdpManaged(yamlBody)) {
         throw new Error(
-          `Agent '${name}' is not IDP-managed (missing label ${MANAGED_BY_LABEL}=${MANAGED_BY_VALUE}). Tear down by hand to avoid removing unrelated files.`,
+          `Agent '${name}' is not IDP-managed (missing label ${IDP_MANAGED_LABEL}=${IDP_MANAGED_VALUE}). Tear down by hand to avoid removing unrelated files.`,
         );
       }
 
