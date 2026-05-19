@@ -76,7 +76,10 @@ metadata:
   namespace: kagent
   labels:
     app.kubernetes.io/part-of: kagent
-    app.kubernetes.io/managed-by: backstage-scaffolder
+    app.kubernetes.io/managed-by: kagent
+    app.kubernetes.io/name: release-coordinator
+    app: kagent
+    arigsela.com/idp-managed: "true"
 spec:
   description: test agent
 `;
@@ -204,7 +207,7 @@ describe('kagent:agent:open-decommission-pr', () => {
     const action = createKagentDecommissionAction();
 
     await expect(action.handler(ctx)).rejects.toThrow(
-      "Agent 'build-orchestrator' is not IDP-managed (missing label app.kubernetes.io/managed-by=backstage-scaffolder). Tear down by hand to avoid removing unrelated files.",
+      "Agent 'build-orchestrator' is not IDP-managed (missing label arigsela.com/idp-managed=true). Tear down by hand to avoid removing unrelated files.",
     );
     expect(mock.git.createRef).not.toHaveBeenCalled();
     expect(mock.repos.deleteFile).not.toHaveBeenCalled();
