@@ -158,7 +158,8 @@ metadata:
     # --- NEW: agent contract v1 ---
     agents.platform.ai/version: "v1"
     agents.platform.ai/runtime: kagent
-    agents.platform.ai/description: ${{ values.description | trim }}
+    agents.platform.ai/description: |-
+      ${{ values.description | trim }}
     agents.platform.ai/a2a-endpoint: http://${{ values.name }}.kagent.svc.cluster.local:8080
     agents.platform.ai/skills: |-
       ${{ values.skills | dump }}
@@ -170,8 +171,11 @@ metadata:
 **Nunjucks/YAML notes:**
 
 - `| dump` produces a JSON string from the input value
-- `|-` block scalar forces YAML to treat the JSON output as a string, not
-  parse it as nested YAML
+- `|-` block scalar is applied to **all user-input-derived string values**
+  (`description`, `skills`, `delegates`) to shield against `:`, newlines,
+  quotes, or any other character that would otherwise be interpreted by
+  the YAML parser. Constant values (`version`, `runtime`, `capabilities`)
+  and the controlled-format `a2a-endpoint` are safe as plain scalars.
 - Empty arrays render as `[]`
 - No new dependencies, no custom scaffolder actions
 
