@@ -344,6 +344,16 @@ kubernetes:
           authProvider: 'serviceAccount'                 # Use ServiceAccount token (production / in-cluster)
           skipTLSVerify: true                            # Skip TLS verification (self-signed certs in homelab)
           serviceAccountToken: ${K8S_SERVICE_ACCOUNT_TOKEN}  # Token injected via K8s Secret
+  # CUSTOM RESOURCES (v1.8):
+  # Declares non-standard k8s kinds the plugin should fetch for entity-page
+  # Kubernetes tabs. Used by the kagent-agent entity page to show the live
+  # Agent CRD alongside its workload (Pod/Deployment/Service).
+  # NOTE: this block must be mirrored in app-config.production.yaml because
+  # Backstage merges objects but REPLACES arrays (v1.6 lesson).
+  customResources:
+    - group: 'kagent.dev'
+      apiVersion: 'v1alpha2'
+      plural: 'agents'
 
 # --- PERMISSIONS ---
 # The permissions framework controls access to Backstage features.
