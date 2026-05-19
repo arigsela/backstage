@@ -1,0 +1,15 @@
+{
+  "name": "test-multiline",
+  "description": "Line one of the description.\nLine two with: a colon.\nLine three.",
+  "owner": "group:platform-engineering",
+  "systemMessage": "You handle multi-paragraph specs.",
+  "includeBuiltinPrompts": false,
+  "delegateAgents": [],
+  "skills": [],
+  "cpuRequest": "100m",
+  "cpuLimit": "500m",
+  "memoryRequest": "128Mi",
+  "memoryLimit": "512Mi",
+  "compactionInterval": 10,
+  "overlapSize": 2
+}

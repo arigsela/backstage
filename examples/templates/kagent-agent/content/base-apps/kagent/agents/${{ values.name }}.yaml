@@ -14,8 +14,25 @@ metadata:
     terasky.backstage.io/component-type: kagent-agent
     backstage.io/managed-by-location: url:https://github.com/arigsela/kubernetes/blob/main/base-apps/kagent/agents/${{ values.name }}.yaml
     backstage.io/owner: ${{ values.owner }}
+    # === agents.platform.ai/* v1 contract ===
+    # Structured metadata mirrored to the Backstage catalog by the TeraSky
+    # kubernetes-ingestor. Consumed by future MCP-backed assistants to
+    # enumerate and call this agent. Contract spec:
+    # docs/superpowers/specs/2026-05-19-aicontext-catalog-kind-design.md
+    agents.platform.ai/version: "v1"
+    agents.platform.ai/runtime: kagent
+    agents.platform.ai/description: |-
+      ${{ values.description | trim | indent(6) }}
+    # Port 8080 is the kagent default A2A service port.
+    agents.platform.ai/a2a-endpoint: http://${{ values.name }}.kagent.svc.cluster.local:8080
+    agents.platform.ai/skills: |-
+      ${{ values.skills | dump }}
+    agents.platform.ai/delegates: |-
+      ${{ values.delegateAgents | dump }}
+    agents.platform.ai/capabilities: '{"streaming":true,"a2a":true}'
 spec:
-  description: ${{ values.description }}
+  description: |-
+    ${{ values.description | trim | indent(4) }}
   type: Declarative
   declarative:
     modelConfig: default-model-config
