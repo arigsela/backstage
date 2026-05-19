@@ -65,6 +65,7 @@ async function vaultRequest(
  *   - vaultRole (required): Vault role name (also used for policy and secret path)
  *   - namespace (required): K8s namespace for ServiceAccount binding
  *   - enableKnowledge (optional): If true, seeds an openai-api-key placeholder
+ *   - enableAuth (optional): If true, seeds a jwt-secret placeholder
  *   - serviceAccountNames (optional): Comma-separated SA names, defaults to "default"
  *
  * Outputs:
@@ -99,6 +100,14 @@ export function createVaultSetupAction() {
             .describe(
               'If true, seeds an openai-api-key placeholder for RAG embeddings',
             ),
+        enableAuth: z =>
+          z
+            .boolean()
+            .optional()
+            .default(false)
+            .describe(
+              'If true, seeds a jwt-secret placeholder for JWT authentication',
+            ),
         serviceAccountNames: z =>
           z
             .string()
@@ -122,6 +131,7 @@ export function createVaultSetupAction() {
         vaultRole,
         namespace,
         enableKnowledge = false,
+        enableAuth = false,
         serviceAccountNames = 'default',
       } = ctx.input;
 
@@ -211,6 +221,9 @@ export function createVaultSetupAction() {
       const requiredKeys: string[] = ['anthropic-api-key', 'api-keys'];
       if (enableKnowledge) {
         requiredKeys.push('openai-api-key');
+      }
+      if (enableAuth) {
+        requiredKeys.push('jwt-secret');
       }
 
       // Try to read existing secrets from Vault
