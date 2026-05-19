@@ -1,11 +1,3 @@
-{%- set delegate_descriptions = {
-    "k8s-agent": "Kubernetes cluster operations (pods, deployments, RBAC, troubleshooting)",
-    "helm-agent": "Helm release lifecycle (install/upgrade/rollback, chart inspection)",
-    "istio-agent": "Istio service-mesh configuration and traffic management",
-    "kgateway-agent": "Kubernetes Gateway API (kgateway/Envoy)",
-    "argo-rollouts-conversion-agent": "Convert Deployments to Argo Rollouts for progressive delivery",
-    "observability-agent": "Prometheus + Grafana metrics and dashboard management"
-} -%}
 apiVersion: kagent.dev/v1alpha2
 kind: Agent
 metadata:
@@ -19,59 +11,6 @@ metadata:
     terasky.backstage.io/component-type: kagent-agent
     backstage.io/managed-by-location: url:https://github.com/arigsela/kubernetes/blob/main/base-apps/kagent/agents/${{ values.name }}.yaml
     backstage.io/owner: ${{ values.owner }}
-    terasky.backstage.io/kagent-about: |
-      # ${{ values.name }}
-
-      ${{ values.description }}
-
-      ## Purpose
-
-      ${{ values.systemMessage | replace('\n', '\n      ') }}
-{%- if values.skills | length > 0 %}
-
-      ## Skills
-{%- for skill in values.skills %}
-
-      ### ${{ skill.name }} (`${{ skill.id }}`)
-
-      ${{ skill.description }}
-{%- if skill.examples and skill.examples | length > 0 %}
-
-      **Examples:**
-{%- for example in skill.examples %}
-      - ${{ example }}
-{%- endfor %}
-{%- endif %}
-{%- if skill.tags and skill.tags | length > 0 %}
-
-      **Tags:** {% for tag in skill.tags %}`${{ tag }}`{% if not loop.last %}, {% endif %}{% endfor %}
-{%- endif %}
-{%- endfor %}
-{%- endif %}
-
-      ## Delegates to
-
-      This agent can delegate tasks to the following agents:
-{%- for agentName in values.delegateAgents %}
-      - **${{ agentName }}** — {{ delegate_descriptions[agentName] or "(see kagent docs)" }}
-{%- endfor %}
-
-      ## Configuration
-
-      | Setting | Value |
-      |---|---|
-      | Model | `default-model-config` |
-      | Memory model | `embedding-model-config` |
-      | Compaction interval | ${{ values.compactionInterval }} turns |
-      | Compaction overlap | ${{ values.overlapSize }} turns |
-      | CPU | ${{ values.cpuRequest }} / ${{ values.cpuLimit }} (req/lim) |
-      | Memory | ${{ values.memoryRequest }} / ${{ values.memoryLimit }} (req/lim) |
-      | Built-in prompts | {% if values.includeBuiltinPrompts %}included{% else %}not included{% endif %} |
-
-      ## Manage
-
-      - **Edit:** hand-edit `base-apps/kagent/agents/${{ values.name }}.yaml` and open a PR
-      - **Decommission:** use the **Decommission Kagent Agent** template in Backstage
 spec:
   description: ${{ values.description }}
   type: Declarative
