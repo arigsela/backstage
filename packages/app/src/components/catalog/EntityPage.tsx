@@ -214,16 +214,18 @@ const KagentAboutCardContent = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // TeraSky's kubernetes-resource-* annotations point at the Deployment
+    // workload (apps/v1), not the Agent CRD itself. Our IDP convention is
+    // Agent name == Deployment name == entity name, both in the kagent
+    // namespace, so we use those values and hardcode the kagent API path.
     const ann = entity.metadata.annotations || {};
-    const name = ann['terasky.backstage.io/kubernetes-resource-name'];
-    const namespace = ann['terasky.backstage.io/kubernetes-resource-namespace'];
-    const apiVersion =
-      ann['terasky.backstage.io/kubernetes-resource-api-version'];
+    const name =
+      ann['terasky.backstage.io/kubernetes-resource-name'] || entity.metadata.name;
+    const namespace =
+      ann['terasky.backstage.io/kubernetes-resource-namespace'] || 'kagent';
 
-    if (!name || !namespace || apiVersion !== 'kagent.dev/v1alpha2') {
-      setError(
-        'Entity is missing the terasky.backstage.io/kubernetes-resource-* annotations needed to locate the Agent CRD',
-      );
+    if (!name || !namespace) {
+      setError('Unable to determine the Agent CRD name/namespace from the entity');
       setLoading(false);
       return;
     }
@@ -232,7 +234,7 @@ const KagentAboutCardContent = () => {
     kubernetesApi
       .proxy({
         clusterName: 'homelab',
-        path: `/apis/${apiVersion}/namespaces/${namespace}/agents/${name}`,
+        path: `/apis/kagent.dev/v1alpha2/namespaces/${namespace}/agents/${name}`,
       })
       .then(res => {
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
