@@ -297,10 +297,33 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 Now make the failing tests pass by adding the 7 annotations to the rendered CRD.
 
+Task 1's `full` fixture additionally surfaced a pre-existing YAML-escaping
+bug on the existing `spec.description` field — it is rendered as a plain
+scalar and breaks if the user's description contains a colon. This task
+also fixes that.
+
 **Files:**
 - Modify: `examples/templates/kagent-agent/content/base-apps/kagent/agents/${{ values.name }}.yaml`
 
-- [ ] **Step 1: Add the annotations**
+- [ ] **Step 1a: Fix the existing `spec.description` quoting**
+
+The current file at line 18 has:
+
+```yaml
+spec:
+  description: ${{ values.description }}
+```
+
+Change line 18 to use a `|-` block scalar so user input containing `:`,
+newlines, or quotes can't break YAML parsing:
+
+```yaml
+spec:
+  description: |-
+    ${{ values.description }}
+```
+
+- [ ] **Step 1b: Add the new annotations**
 
 Edit the file. The existing `metadata.annotations` block is at lines 12–16. Insert 7 new annotations after `backstage.io/owner`, **before** the `spec:` block at line 17:
 
@@ -375,6 +398,11 @@ git commit -m "feat(kagent): emit agents.platform.ai/* v1 contract
 Adds 7 structured annotations to the rendered kagent Agent CRD so
 MCP-backed assistants can enumerate and call agents via the
 Backstage catalog API without a second K8s API hop.
+
+Also fixes a pre-existing YAML-escaping bug on spec.description: if a
+user's description contained ':' or newlines, the rendered CRD was
+invalid YAML. Switched to a |- block scalar to match the new annotation
+contract's escaping discipline.
 
 Layer 1 contract test (scripts/kagent-template/test-contract.sh)
 now passes. See docs/superpowers/specs/2026-05-19-aicontext-catalog-kind-design.md
