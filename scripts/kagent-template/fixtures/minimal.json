@@ -1,0 +1,15 @@
+{
+  "name": "test-minimal",
+  "description": "Smallest valid kagent agent for contract verification.",
+  "owner": "group:platform-engineering",
+  "systemMessage": "You are a test agent.",
+  "includeBuiltinPrompts": false,
+  "delegateAgents": [],
+  "skills": [],
+  "cpuRequest": "100m",
+  "cpuLimit": "500m",
+  "memoryRequest": "128Mi",
+  "memoryLimit": "512Mi",
+  "compactionInterval": 10,
+  "overlapSize": 2
+}

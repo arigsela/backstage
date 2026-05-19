@@ -1,0 +1,23 @@
+{
+  "name": "test-full",
+  "description": "Coordinates 'release' & deploy: orchestrates other agents.",
+  "owner": "group:platform-engineering",
+  "systemMessage": "You coordinate other agents.",
+  "includeBuiltinPrompts": true,
+  "delegateAgents": ["helm-agent", "git-agent"],
+  "skills": [
+    {
+      "id": "coordinate-release",
+      "name": "Coordinate release",
+      "description": "Orchestrate a multi-step release.",
+      "examples": ["Release version 1.2.3", "Cut a hotfix"],
+      "tags": ["release", "coordination"]
+    }
+  ],
+  "cpuRequest": "200m",
+  "cpuLimit": "1000m",
+  "memoryRequest": "256Mi",
+  "memoryLimit": "1Gi",
+  "compactionInterval": 20,
+  "overlapSize": 4
+}
