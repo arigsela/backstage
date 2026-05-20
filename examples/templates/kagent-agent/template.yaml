@@ -65,7 +65,7 @@ spec:
 
     # --- WIZARD PAGE 2: Behavior ---
     - title: Behavior
-      required: [systemMessage, delegateAgents]
+      required: [systemMessage]
       properties:
         systemMessage:
           title: System message
@@ -94,9 +94,12 @@ spec:
           title: Delegate to these agents
           type: array
           description: >-
-            One or more agents this agent can delegate tasks to (A2A protocol).
-            Must select at least one.
-          minItems: 1
+            Optional. Agents this agent can delegate tasks to (A2A protocol).
+            Leave empty for prompt-only agents that don't need to call other
+            agents or query cluster state (e.g. creative agents, DSL helpers).
+            Skip `observability-agent` until its broken promql-agent
+            dependency is fixed.
+          default: []
           uniqueItems: true
           items:
             type: string
