@@ -445,3 +445,86 @@ describe('kagent:agent:invoke — A2AClient', () => {
     }
   }, 10000);
 });
+
+describe('kagent:agent:invoke — orchestration', () => {
+  let fetchSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    fetchSpy = jest.spyOn(global, 'fetch');
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  it('expectJson: true — parses JSON response', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
+      .mockResolvedValueOnce(mockA2ASuccess('{"foo": "bar", "n": 42}'));
+
+    const action = createKagentInvokeAction({ discovery: mockDiscovery() });
+    const ctx = createMockActionContext({
+      input: { name: 'foo-agent', prompt: 'hi', expectJson: true },
+    });
+
+    await action.handler(ctx);
+
+    expect(ctx.output).toHaveBeenCalledWith('response', { foo: 'bar', n: 42 });
+  });
+
+  it('expectJson: true on bad JSON — INVALID_RESPONSE_JSON', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
+      .mockResolvedValueOnce(mockA2ASuccess('not json'));
+
+    const action = createKagentInvokeAction({ discovery: mockDiscovery() });
+    const ctx = createMockActionContext({
+      input: { name: 'foo-agent', prompt: 'hi', expectJson: true },
+    });
+
+    try {
+      await action.handler(ctx);
+      fail('expected throw');
+    } catch (e: any) {
+      expect(e.code).toBe('INVALID_RESPONSE_JSON');
+    }
+  });
+
+  it('onError: continue — returns error in output instead of throwing', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
+      .mockResolvedValueOnce(mockA2AHttp500());
+
+    const action = createKagentInvokeAction({ discovery: mockDiscovery() });
+    const ctx = createMockActionContext({
+      input: { name: 'foo-agent', prompt: 'hi', onError: 'continue' },
+    });
+
+    await action.handler(ctx);
+
+    expect(ctx.output).toHaveBeenCalledWith(
+      'error',
+      expect.objectContaining({ code: 'AGENT_ERROR' }),
+    );
+    expect(ctx.output).toHaveBeenCalledWith('response', '');
+  });
+
+  it('durationMs is set to a non-negative number', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
+      .mockResolvedValueOnce(mockA2ASuccess('done'));
+
+    const action = createKagentInvokeAction({ discovery: mockDiscovery() });
+    const ctx = createMockActionContext({
+      input: { name: 'foo-agent', prompt: 'hi' },
+    });
+
+    await action.handler(ctx);
+
+    const durationCall = (ctx.output as jest.Mock).mock.calls.find(
+      ([k]) => k === 'durationMs',
+    );
+    expect(durationCall).toBeDefined();
+    expect(durationCall![1]).toBeGreaterThanOrEqual(0);
+  });
+});
