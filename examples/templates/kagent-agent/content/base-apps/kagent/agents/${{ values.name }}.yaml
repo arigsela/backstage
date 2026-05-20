@@ -74,12 +74,16 @@ spec:
 {%- endif %}
 {%- endfor %}
 {%- endif %}
+{%- if values.delegateAgents | length > 0 %}
     tools:
 {%- for agentName in values.delegateAgents %}
     - type: Agent
       agent:
         name: ${{ agentName }}
 {%- endfor %}
+{%- else %}
+    tools: []
+{%- endif %}
     deployment:
       resources:
         requests:

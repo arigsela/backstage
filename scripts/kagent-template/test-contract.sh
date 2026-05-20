@@ -105,6 +105,15 @@ check_fixture() {
     fail_count=$((fail_count + 1))
   fi
 
+  # spec.declarative.tools must always be a list (never null), or the kagent
+  # CRD's OpenAPI validation rejects the resource at apply time.
+  local tools_kind
+  tools_kind="$(echo "$rendered" | yq eval '.spec.declarative.tools | tag' -)"
+  if [[ "$tools_kind" != "!!seq" ]]; then
+    echo "  FAIL: spec.declarative.tools must be a list (got tag '$tools_kind')"
+    fail_count=$((fail_count + 1))
+  fi
+
   echo "  done"
 }
 
