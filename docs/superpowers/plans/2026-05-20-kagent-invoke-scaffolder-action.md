@@ -12,6 +12,60 @@
 
 ---
 
+## A2A Probe Findings (2026-05-20)
+
+**Request URL:** `POST http://dnd-agent.kagent.svc.cluster.local:8080/`
+
+**Request body:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "probe-2",
+  "method": "message/send",
+  "params": {
+    "message": {
+      "messageId": "msg-probe-1",
+      "role": "user",
+      "parts": [{"type": "text", "text": "Say hi in one word."}]
+    }
+  }
+}
+```
+
+**Successful response (truncated):**
+```json
+{
+  "id": "probe-2",
+  "jsonrpc": "2.0",
+  "result": {
+    "artifacts": [
+      {
+        "artifactId": "31b2be33-ab8c-41b4-a9cb-9d8f037b404f",
+        "parts": [{"kind": "text", "text": "Greetings!"}]
+      }
+    ],
+    "contextId": "33863faa-d569-417e-9c41-d2be871fd36b",
+    "id": "f55d8a72-2998-48bc-8ff0-7cd73f3e8103",
+    "kind": "task",
+    "status": {"state": "completed", "timestamp": "2026-05-20T15:34:40.823818+00:00"}
+  }
+}
+```
+
+**Response text path:** `.result.artifacts[0].parts[0].text`
+
+**Error reporting:** Always HTTP 200; errors returned as JSON-RPC envelope. Validation errors use code `-32602` (Invalid params) with a `data` array of Pydantic errors. Unknown methods use code `-32601` (Method not found). No non-200 HTTP statuses observed for protocol-level errors.
+
+**Spec delta:**
+1. **`params.message.messageId` is required** — the spec's assumed shape omits it; the agent returns a `-32602` validation error without it. The `A2AClient` must generate and supply a unique `messageId` (e.g., `crypto.randomUUID()`).
+2. **`params.message.parts[].type` field is accepted on input** but the response uses `parts[].kind` (not `parts[].type`). Input uses `type: "text"`; output uses `kind: "text"`. Both convey the same content field `text`.
+3. **Response text is in `.result.artifacts[0].parts[0].text`**, not `.result.parts[].text` as the spec assumed. The top-level task result wraps the reply inside an `artifacts` array, not a flat `parts` array.
+4. **Protocol version is `0.3.0`** (confirmed via `GET /.well-known/agent.json`). The agent card also confirms `preferredTransport: "JSONRPC"` and the A2A endpoint URL as `http://dnd-agent.kagent:8080`.
+
+The `A2AClient` in Task 4 must use this probed shape — not the spec's assumed shape if they differ.
+
+---
+
 ## File Structure
 
 | Path | Action | Purpose |
