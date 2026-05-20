@@ -65,7 +65,7 @@ spec:
 
     # --- WIZARD PAGE 2: Behavior ---
     - title: Behavior
-      required: [systemMessage, delegateAgents]
+      required: [systemMessage]
       properties:
         systemMessage:
           title: System message
@@ -91,12 +91,12 @@ spec:
             ConfigMap.
           default: true
         delegateAgents:
-          title: Delegate to these agents
+          title: Delegate to these agents (optional)
           type: array
+          default: []
           description: >-
-            One or more agents this agent can delegate tasks to (A2A protocol).
-            Must select at least one.
-          minItems: 1
+            Agents this agent can delegate tasks to (A2A protocol). Leave
+            empty for a standalone agent that doesn't delegate.
           uniqueItems: true
           items:
             type: string
