@@ -24,6 +24,92 @@ export class AgentInvocationError extends Error {
   }
 }
 
+interface EndpointInfo {
+  endpoint: string;
+  runtime: string;
+  contractVersion: string;
+}
+
+async function resolveAgent(
+  discovery: DiscoveryService,
+  name: string,
+  logger: { info: (...args: any[]) => void; warn: (...args: any[]) => void },
+): Promise<EndpointInfo> {
+  const catalogBase = await discovery.getBaseUrl('catalog');
+  const url = `${catalogBase}/entities/by-name/component/default/${encodeURIComponent(name)}`;
+
+  logger.info(`kagent:agent:invoke — resolving '${name}'`);
+
+  const response = await fetch(url);
+
+  if (response.status === 404) {
+    throw new AgentInvocationError(
+      'AGENT_NOT_FOUND',
+      `No catalog entity 'component:default/${name}'. Has the kagent Agent been ingested yet?`,
+    );
+  }
+  if (!response.ok) {
+    throw new AgentInvocationError(
+      'INVALID_CONTRACT',
+      `Catalog returned HTTP ${response.status} for '${name}'.`,
+    );
+  }
+
+  const entity: any = await response.json();
+  const annotations: Record<string, string> = entity?.metadata?.annotations ?? {};
+
+  if (entity?.spec?.type !== 'kagent-agent') {
+    throw new AgentInvocationError(
+      'INVALID_CONTRACT',
+      `Entity 'component:default/${name}' is not a kagent-agent (got type: ${entity?.spec?.type}).`,
+    );
+  }
+
+  const version = annotations['agents.platform.ai/version'];
+  if (version !== 'v1') {
+    throw new AgentInvocationError(
+      'INVALID_CONTRACT',
+      `Unsupported contract version: ${version}`,
+    );
+  }
+
+  const runtime = annotations['agents.platform.ai/runtime'];
+  if (runtime !== 'kagent') {
+    throw new AgentInvocationError(
+      'INVALID_CONTRACT',
+      `Unsupported runtime: ${runtime}`,
+    );
+  }
+
+  const endpoint = annotations['agents.platform.ai/a2a-endpoint'];
+  if (!endpoint) {
+    throw new AgentInvocationError(
+      'INVALID_CONTRACT',
+      `Entity 'component:default/${name}' is missing the agents.platform.ai/a2a-endpoint annotation.`,
+    );
+  }
+  try {
+    // Validate URL format.
+    const parsed = new URL(endpoint);
+    if (!parsed.hostname.endsWith('.svc.cluster.local')) {
+      logger.warn(
+        `kagent:agent:invoke — endpoint hostname '${parsed.hostname}' is not cluster-local; allowing for local-testing use case.`,
+      );
+    }
+  } catch {
+    throw new AgentInvocationError(
+      'INVALID_CONTRACT',
+      `Entity 'component:default/${name}' has an invalid a2a-endpoint URL: ${endpoint}`,
+    );
+  }
+
+  logger.info(
+    `kagent:agent:invoke — endpoint=${endpoint} runtime=${runtime}`,
+  );
+
+  return { endpoint, runtime, contractVersion: version };
+}
+
 export function createKagentInvokeAction(opts: { discovery: DiscoveryService }) {
   const { discovery } = opts;
 
@@ -80,11 +166,43 @@ export function createKagentInvokeAction(opts: { discovery: DiscoveryService }) 
       },
     },
 
-    async handler(_ctx) {
-      // Keep discovery live for the typechecker until Tasks 3–5 wire it in.
-      void discovery;
-      // Filled in by Tasks 3–5.
-      throw new Error('kagent:agent:invoke: not yet implemented');
+    async handler(ctx) {
+      const { name, prompt, onError } = ctx.input as {
+        name: string;
+        prompt: string;
+        onError?: 'fail' | 'continue';
+      };
+
+      const startedAt = Date.now();
+
+      try {
+        const info = await resolveAgent(discovery, name, ctx.logger);
+
+        // A2AClient call is wired in Task 4. For now, throw so the catalog
+        // path is exercised end-to-end by the tests.
+        void prompt;
+        void info;
+        throw new AgentInvocationError(
+          'AGENT_ERROR',
+          'A2A invocation not yet implemented (wired in Task 4).',
+        );
+      } catch (e: any) {
+        const code = e instanceof AgentInvocationError ? e.code : 'AGENT_ERROR';
+        const message = e instanceof Error ? e.message : String(e);
+
+        if (onError === 'continue') {
+          ctx.output('response', '');
+          ctx.output('agentName', name);
+          ctx.output('runtime', 'kagent');
+          ctx.output('durationMs', Date.now() - startedAt);
+          ctx.output('error', { code, message });
+          ctx.logger.error(`kagent:agent:invoke — ${code}: ${message}`);
+          return;
+        }
+
+        ctx.logger.error(`kagent:agent:invoke — ${code}: ${message}`);
+        throw e;
+      }
     },
   });
 }
