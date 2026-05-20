@@ -256,10 +256,8 @@ describe('kagent:agent:invoke — AgentResolver', () => {
     await action.handler(ctx);
 
     expect(discovery.getBaseUrl).toHaveBeenCalledWith('catalog');
-    expect(fetchSpy).toHaveBeenNthCalledWith(
-      1,
+    expect(fetchSpy.mock.calls[0][0]).toBe(
       'http://localhost:7007/api/catalog/entities/by-name/component/default/foo-agent',
-      expect.anything(),
     );
   });
 });

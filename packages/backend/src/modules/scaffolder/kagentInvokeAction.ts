@@ -288,12 +288,63 @@ export function createKagentInvokeAction(opts: { discovery: DiscoveryService }) 
     },
 
     async handler(ctx) {
-      const inputs = ctx.input as {
-        name: string;
-        prompt: string;
-        expectJson?: boolean;
-        timeoutMs?: number;
-        onError?: 'fail' | 'continue';
+      const raw = ctx.input as Record<string, unknown>;
+
+      // Runtime input validation. The schema declared in `createTemplateAction`
+      // drives the wizard UI form generator but does NOT enforce at handler
+      // call time, so we re-validate here. Mirrors the spec's input contract.
+      if (
+        typeof raw.name !== 'string' ||
+        !/^[a-z][a-z0-9-]{2,38}[a-z0-9]$/.test(raw.name)
+      ) {
+        throw new Error(
+          `kagent:agent:invoke: invalid agent name '${String(raw.name)}'. Must match ^[a-z][a-z0-9-]{2,38}[a-z0-9]$.`,
+        );
+      }
+      if (
+        typeof raw.prompt !== 'string' ||
+        raw.prompt.length < 1 ||
+        raw.prompt.length > 8000
+      ) {
+        throw new Error(
+          `kagent:agent:invoke: invalid prompt length (${
+            typeof raw.prompt === 'string' ? raw.prompt.length : 'not a string'
+          }). Must be 1..8000 chars.`,
+        );
+      }
+      if (raw.timeoutMs !== undefined) {
+        if (
+          typeof raw.timeoutMs !== 'number' ||
+          !Number.isInteger(raw.timeoutMs) ||
+          raw.timeoutMs < 5000 ||
+          raw.timeoutMs > 300000
+        ) {
+          throw new Error(
+            `kagent:agent:invoke: invalid timeoutMs ${String(raw.timeoutMs)}. Must be an integer in 5000..300000.`,
+          );
+        }
+      }
+      if (
+        raw.onError !== undefined &&
+        raw.onError !== 'fail' &&
+        raw.onError !== 'continue'
+      ) {
+        throw new Error(
+          `kagent:agent:invoke: invalid onError '${String(raw.onError)}'. Must be 'fail' or 'continue'.`,
+        );
+      }
+      if (raw.expectJson !== undefined && typeof raw.expectJson !== 'boolean') {
+        throw new Error(
+          `kagent:agent:invoke: invalid expectJson type (${typeof raw.expectJson}). Must be boolean.`,
+        );
+      }
+
+      const inputs = {
+        name: raw.name,
+        prompt: raw.prompt,
+        expectJson: raw.expectJson as boolean | undefined,
+        timeoutMs: raw.timeoutMs as number | undefined,
+        onError: raw.onError as 'fail' | 'continue' | undefined,
       };
       const onError = inputs.onError ?? 'fail';
       const timeoutMs = inputs.timeoutMs ?? 120_000;
