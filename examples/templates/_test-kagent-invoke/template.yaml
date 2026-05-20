@@ -3,7 +3,7 @@
 apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:
-  name: _test-kagent-invoke
+  name: test-kagent-invoke
   title: '[INTERNAL] Test kagent:agent:invoke'
   description: >-
     Throwaway template for Layer 2 validation of the kagent:agent:invoke
