@@ -263,3 +263,185 @@ describe('kagent:agent:invoke — AgentResolver', () => {
     );
   });
 });
+
+// A2A response shape per the live probe (Task 1):
+//   .result is a Task object with .artifacts[].parts[].text
+//   parts use `kind` (not `type`) on the way out
+function mockA2ASuccess(text: string) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      jsonrpc: '2.0',
+      id: 'test',
+      result: {
+        kind: 'task',
+        artifacts: [
+          {
+            artifactId: 'art-1',
+            parts: [{ kind: 'text', text }],
+          },
+        ],
+        status: { state: 'completed' },
+      },
+    }),
+  } as any;
+}
+
+function mockA2AJsonRpcError(code: number, message: string) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      jsonrpc: '2.0',
+      id: 'test',
+      error: { code, message },
+    }),
+  } as any;
+}
+
+function mockA2AHttp500() {
+  return {
+    ok: false,
+    status: 500,
+    json: async () => ({}),
+    text: async () => 'internal server error',
+  } as any;
+}
+
+describe('kagent:agent:invoke — A2AClient', () => {
+  let fetchSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    fetchSpy = jest.spyOn(global, 'fetch');
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  it('happy path — concatenates text parts from artifacts', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
+      .mockResolvedValueOnce(mockA2ASuccess('Hello from the agent.'));
+
+    const action = createKagentInvokeAction({ discovery: mockDiscovery() });
+    const ctx = createMockActionContext({
+      input: { name: 'foo-agent', prompt: 'hi' },
+    });
+
+    await action.handler(ctx);
+
+    expect(ctx.output).toHaveBeenCalledWith('response', 'Hello from the agent.');
+    expect(ctx.output).toHaveBeenCalledWith('agentName', 'foo-agent');
+    expect(ctx.output).toHaveBeenCalledWith('runtime', 'kagent');
+    expect(ctx.output).toHaveBeenCalledWith('error', null);
+  });
+
+  it('request body includes messageId (required by kagent A2A)', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
+      .mockResolvedValueOnce(mockA2ASuccess('ok'));
+
+    const action = createKagentInvokeAction({ discovery: mockDiscovery() });
+    const ctx = createMockActionContext({
+      input: { name: 'foo-agent', prompt: 'hi' },
+    });
+
+    await action.handler(ctx);
+
+    const a2aCall = fetchSpy.mock.calls[1];
+    const body = JSON.parse((a2aCall[1] as any).body);
+    expect(body.method).toBe('message/send');
+    expect(body.params.message.messageId).toEqual(expect.any(String));
+    expect(body.params.message.messageId.length).toBeGreaterThan(0);
+  });
+
+  it('ENDPOINT_UNREACHABLE after retry exhaustion', async () => {
+    const networkErr = new TypeError('fetch failed');
+    (networkErr as any).cause = { code: 'ECONNREFUSED' };
+
+    fetchSpy
+      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
+      .mockRejectedValueOnce(networkErr)
+      .mockRejectedValueOnce(networkErr);
+
+    const action = createKagentInvokeAction({ discovery: mockDiscovery() });
+    const ctx = createMockActionContext({
+      input: { name: 'foo-agent', prompt: 'hi' },
+    });
+
+    try {
+      await action.handler(ctx);
+      fail('expected throw');
+    } catch (e: any) {
+      expect(e.code).toBe('ENDPOINT_UNREACHABLE');
+    }
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it('AGENT_ERROR on HTTP 500', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
+      .mockResolvedValueOnce(mockA2AHttp500());
+
+    const action = createKagentInvokeAction({ discovery: mockDiscovery() });
+    const ctx = createMockActionContext({
+      input: { name: 'foo-agent', prompt: 'hi' },
+    });
+
+    try {
+      await action.handler(ctx);
+      fail('expected throw');
+    } catch (e: any) {
+      expect(e.code).toBe('AGENT_ERROR');
+      expect(e.message).toContain('500');
+    }
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('AGENT_ERROR on JSON-RPC error envelope', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
+      .mockResolvedValueOnce(mockA2AJsonRpcError(-32603, 'internal'));
+
+    const action = createKagentInvokeAction({ discovery: mockDiscovery() });
+    const ctx = createMockActionContext({
+      input: { name: 'foo-agent', prompt: 'hi' },
+    });
+
+    try {
+      await action.handler(ctx);
+      fail('expected throw');
+    } catch (e: any) {
+      expect(e.code).toBe('AGENT_ERROR');
+      expect(e.message).toContain('-32603');
+    }
+  });
+
+  it('INVOCATION_TIMEOUT when fetch never resolves', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
+      .mockImplementationOnce((_url: string, init: any) => {
+        return new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => {
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        });
+      });
+
+    const action = createKagentInvokeAction({ discovery: mockDiscovery() });
+    const ctx = createMockActionContext({
+      input: { name: 'foo-agent', prompt: 'hi', timeoutMs: 5000 },
+    });
+
+    try {
+      await action.handler(ctx);
+      fail('expected throw');
+    } catch (e: any) {
+      expect(e.code).toBe('INVOCATION_TIMEOUT');
+    }
+  }, 10000);
+});

@@ -16,6 +16,7 @@
 
 import { createTemplateAction } from '@backstage/plugin-scaffolder-node';
 import type { DiscoveryService } from '@backstage/backend-plugin-api';
+import { randomUUID } from 'crypto';
 
 export class AgentInvocationError extends Error {
   constructor(public code: string, message: string) {
@@ -110,6 +111,126 @@ async function resolveAgent(
   return { endpoint, runtime, contractVersion: version };
 }
 
+interface InvokeOptions {
+  timeoutMs: number;
+  stepId: string;
+}
+
+/**
+ * Invoke a kagent agent via the A2A protocol.
+ *
+ * Wire format pinned by the live probe in
+ * docs/superpowers/plans/2026-05-20-kagent-invoke-scaffolder-action.md
+ * (A2A Probe Findings section). Three deltas from the upstream A2A spec:
+ *   1. `params.message.messageId` is REQUIRED — agent returns -32602 without it
+ *   2. Response text lives at `.result.artifacts[].parts[].text`
+ *   3. Response parts use `kind: "text"` (input uses `type: "text"`)
+ */
+async function invokeAgent(
+  endpoint: string,
+  prompt: string,
+  opts: InvokeOptions,
+  logger: { info: (...a: any[]) => void; warn: (...a: any[]) => void },
+): Promise<string> {
+  const body = {
+    jsonrpc: '2.0',
+    id: opts.stepId,
+    method: 'message/send',
+    params: {
+      message: {
+        messageId: randomUUID(),
+        role: 'user',
+        parts: [{ type: 'text', text: prompt }],
+      },
+    },
+  };
+
+  const networkErrorCodes = ['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN'];
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+
+  logger.info(
+    `kagent:agent:invoke — POST ${endpoint} (prompt: ${prompt.length} chars)`,
+  );
+
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new AgentInvocationError(
+            'AGENT_ERROR',
+            `Agent returned HTTP ${response.status}.`,
+          );
+        }
+
+        const payload: any = await response.json();
+
+        if (payload?.error) {
+          throw new AgentInvocationError(
+            'AGENT_ERROR',
+            `Agent JSON-RPC error: ${payload.error.code} ${payload.error.message ?? ''}`.trim(),
+          );
+        }
+
+        const artifacts: any[] = payload?.result?.artifacts ?? [];
+        const text = artifacts
+          .flatMap(a => (Array.isArray(a?.parts) ? a.parts : []))
+          .filter(p => p?.kind === 'text')
+          .map(p => String(p.text ?? ''))
+          .join('');
+
+        return text;
+      } catch (e: any) {
+        if (e?.name === 'AbortError') {
+          throw new AgentInvocationError(
+            'INVOCATION_TIMEOUT',
+            `Agent did not respond within ${opts.timeoutMs}ms.`,
+          );
+        }
+        if (e instanceof AgentInvocationError) {
+          throw e;
+        }
+
+        const code = e?.cause?.code ?? e?.code;
+        const isNetworkError = networkErrorCodes.includes(code);
+
+        if (!isNetworkError) {
+          throw e;
+        }
+
+        if (attempt === 0) {
+          logger.warn(
+            `kagent:agent:invoke — retrying after network error: ${code}`,
+          );
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+
+        throw new AgentInvocationError(
+          'ENDPOINT_UNREACHABLE',
+          `Network error after retry: ${code}`,
+        );
+      }
+    }
+
+    // Defensive — the loop body always throws on its second iteration.
+    throw new AgentInvocationError(
+      'ENDPOINT_UNREACHABLE',
+      'Retries exhausted',
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function createKagentInvokeAction(opts: { discovery: DiscoveryService }) {
   const { discovery } = opts;
 
@@ -167,32 +288,57 @@ export function createKagentInvokeAction(opts: { discovery: DiscoveryService }) 
     },
 
     async handler(ctx) {
-      const { name, prompt, onError } = ctx.input as {
+      const inputs = ctx.input as {
         name: string;
         prompt: string;
+        expectJson?: boolean;
+        timeoutMs?: number;
         onError?: 'fail' | 'continue';
       };
+      const onError = inputs.onError ?? 'fail';
+      const timeoutMs = inputs.timeoutMs ?? 120_000;
+      const expectJson = inputs.expectJson ?? false;
 
       const startedAt = Date.now();
 
       try {
-        const info = await resolveAgent(discovery, name, ctx.logger);
-
-        // A2AClient call is wired in Task 4. For now, throw so the catalog
-        // path is exercised end-to-end by the tests.
-        void prompt;
-        void info;
-        throw new AgentInvocationError(
-          'AGENT_ERROR',
-          'A2A invocation not yet implemented (wired in Task 4).',
+        const info = await resolveAgent(discovery, inputs.name, ctx.logger);
+        const text = await invokeAgent(
+          info.endpoint,
+          inputs.prompt,
+          { timeoutMs, stepId: ctx.task?.id ?? 'unknown' },
+          ctx.logger,
         );
+
+        let parsed: unknown = text;
+        if (expectJson) {
+          try {
+            parsed = JSON.parse(text);
+          } catch (e: any) {
+            throw new AgentInvocationError(
+              'INVALID_RESPONSE_JSON',
+              `Expected JSON response but parse failed: ${e.message}`,
+            );
+          }
+        }
+
+        const durationMs = Date.now() - startedAt;
+        ctx.logger.info(
+          `kagent:agent:invoke — response received in ${durationMs}ms (length: ${text.length} chars)`,
+        );
+
+        ctx.output('response', parsed);
+        ctx.output('agentName', inputs.name);
+        ctx.output('runtime', info.runtime);
+        ctx.output('durationMs', durationMs);
+        ctx.output('error', null);
       } catch (e: any) {
         const code = e instanceof AgentInvocationError ? e.code : 'AGENT_ERROR';
         const message = e instanceof Error ? e.message : String(e);
 
         if (onError === 'continue') {
           ctx.output('response', '');
-          ctx.output('agentName', name);
+          ctx.output('agentName', inputs.name);
           ctx.output('runtime', 'kagent');
           ctx.output('durationMs', Date.now() - startedAt);
           ctx.output('error', { code, message });
