@@ -27,7 +27,7 @@ End-to-end walkthrough of the Backstage **Kagent Declarative Agent** template.
 |---|---|
 | **System message** | The prompt — see [Writing good system messages](#writing-good-system-messages) below |
 | **Include builtin prompts** | **Leave ON** unless you have a reason. Lets your system message use `{{include "builtin/safety-guardrails"}}` and `{{include "builtin/kubernetes-context"}}` directives that pull in the chart's standard snippets |
-| **Delegate agents** | At least one required. Pick from the 6 chart-installed agents. **Skip `observability-agent` for now** — it's broken (see [operator gotchas](managing-agents.md#operator-gotchas)) |
+| **Delegate agents** | **Optional.** Pick from the 6 chart-installed agents (the agent will route matching questions to them via A2A). **Leave empty for prompt-only agents** that just need a system message + LLM (creative agents, DSL helpers, single-purpose Q&A). **Skip `observability-agent`** — it's broken (see [operator gotchas](managing-agents.md#operator-gotchas)) |
 
 ### Page 3: A2A Skills (optional)
 
