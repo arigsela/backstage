@@ -12,6 +12,55 @@
 
 ---
 
+## Layer 2 Validation Result (2026-05-20)
+
+Successfully invoked `dnd-agent` end-to-end from a Backstage scaffolder
+template using the new `kagent:agent:invoke` action.
+
+| Field | Value |
+| --- | --- |
+| Agent | `dnd-agent` |
+| Runtime | `kagent` |
+| Prompt | `"Say hello in one short sentence."` (32 chars) |
+| Duration | **5408ms** wall-clock |
+| Response length | 63 chars |
+| Response | *"Greetings, adventurer! Welcome to your next epic D&D adventure."* |
+| Error field | `null` |
+
+Backend log lines confirm the action ran the resolver → A2A flow:
+
+```
+info: kagent:agent:invoke — resolving 'dnd-agent'
+info: kagent:agent:invoke — endpoint=http://dnd-agent.kagent.svc.cluster.local:8080 runtime=kagent
+info: kagent:agent:invoke — POST http://dnd-agent.kagent.svc.cluster.local:8080 (prompt: 32 chars)
+info: kagent:agent:invoke — response received in 5408ms (length: 63 chars)
+```
+
+The wire format pinned by Task 1's probe (JSON-RPC `message/send` with
+`messageId`, response read from `.result.artifacts[0].parts[0].text`,
+parts keyed by `kind` not `type`) worked unmodified. No spec deltas
+discovered during live validation.
+
+The validation traveled through 5 redeploys before landing — three
+gotchas surfaced and are now memorialized:
+
+1. `createTemplateAction` `schema.input` zod constraints are
+   UI-form-only — they don't enforce at handler call time. Fixed by
+   adding manual runtime validation in commit `b59371b`.
+2. Backstage config layering merges objects but **replaces arrays**.
+   `catalog.locations` added only to `app-config.yaml` had no effect on
+   the deployed instance — needed mirroring in
+   `app-config.production.yaml` with a different path prefix.
+   Memorialized in the user's auto-memory (`feedback-production-config-replaces-arrays`).
+3. Entity names must start with `[a-zA-Z0-9]` — a leading underscore in
+   `metadata.name: _test-kagent-invoke` was silently rejected with no
+   error log. Renamed to `test-kagent-invoke` in commit `8311c98`.
+
+Throwaway template (`examples/templates/_test-kagent-invoke/`) and its
+two config-locations entries will be removed in the next commit.
+
+---
+
 ## A2A Probe Findings (2026-05-20)
 
 **Request URL:** `POST http://dnd-agent.kagent.svc.cluster.local:8080/`

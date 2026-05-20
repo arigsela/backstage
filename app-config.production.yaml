@@ -138,14 +138,6 @@ catalog:
       rules:
         - allow: [Template]
 
-    # THROWAWAY — Layer 2 validation of kagent:agent:invoke.
-    # Remove this entry once validation is recorded in the plan.
-    # See: examples/templates/_test-kagent-invoke/template.yaml
-    - type: file
-      target: ./examples/templates/_test-kagent-invoke/template.yaml
-      rules:
-        - allow: [Template]
-
     - type: file
       target: ./examples/org.yaml
       rules:
