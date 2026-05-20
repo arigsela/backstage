@@ -96,3 +96,26 @@ metadata:
 spec:
   type: team
   children: [] # No sub-groups yet
+
+---
+# GROUP: kubernetes-auto-ingested
+# Stub group referenced by entities ingested via TeraSky's kubernetes-ingestor
+# when a K8s resource lacks an explicit owner annotation. Without this stub,
+# Backstage shows "entities not found" warnings on every auto-ingested entity's
+# page (e.g. our kagent agents).
+#
+# This is intentionally NOT a real team — it's a catch-all sink so the catalog
+# graph remains consistent. Real ownership should be set on the K8s resource
+# via `backstage.io/owner` annotation; entities that fall through to this
+# group are a signal that the source manifest is missing ownership metadata.
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: kubernetes-auto-ingested
+  description: >-
+    Synthetic catch-all group for entities auto-ingested from Kubernetes
+    without an explicit owner. Not a real team — assign a real owner via
+    the backstage.io/owner annotation on the source K8s resource.
+spec:
+  type: synthetic # Marker type to distinguish from real teams (team/department/etc.)
+  children: []
