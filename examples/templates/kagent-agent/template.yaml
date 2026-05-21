@@ -116,6 +116,29 @@ spec:
         discover this agent's capabilities. Leave empty if you don't need
         the agent to advertise itself.
       properties:
+        skillSuggest:
+          type: string
+          title: AI assist (optional)
+          ui:field: KagentSuggest
+          ui:options:
+            agent: skill-suggester
+            targetField: skills
+            promptTemplate: |
+              Suggest 3 A2A skills for a kagent agent described as:
+              "{{ description }}"
+              Respond with ONLY a JSON array of exactly 3 objects, each with:
+                - id: kebab-case identifier
+                - name: Title Case display name
+                - description: one-sentence summary
+              No prose. No markdown. Just the JSON array.
+            watchFields: [description]
+            itemShape:
+              id: text
+              name: text
+              description: text
+            buttonLabel: Suggest skills
+            maxSuggestions: 3
+            timeoutMs: 60000
         skills:
           title: Skills
           type: array
