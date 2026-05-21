@@ -12,6 +12,31 @@
 
 ---
 
+## Layer 2 Validation Result (2026-05-21)
+
+The KagentSuggest field works end-to-end against a real `skill-suggester`
+agent in the deployed cluster.
+
+| Field | Value |
+| --- | --- |
+| Agent | `skill-suggester` |
+| Prompt description | `"test agent for skill suggester"` |
+| Response | 3 editable suggestion rows rendered with id/name/description fields and Add buttons |
+| First suggestion | `skill-suggester-validation` — Skill Suggester Validation — "Validates and tests the skill suggestion output format and quality from the skill suggester agent." |
+| Round-trip latency | ~5-10s (visual estimate; no instrumentation captured wall-clock) |
+| Add button | Verified: clicking Add appended the (potentially-edited) item to the Skills array |
+
+### Three gotchas discovered during validation (each fixed; commits logged below)
+
+1. **Frontend not building.** `scripts/build-and-push.sh` only runs `yarn build:backend` — the frontend (`packages/app`) was not rebuilt, so production was serving stale JS. Workaround: `yarn workspace app build && ./scripts/build-and-push.sh`. Permanent fix should be a script change to chain `yarn build:all`.
+2. **Backend body parser not applied.** `req.body` arrived undefined at the route handler despite a correct client request — Backstage's global JSON parser didn't reach our plugin-scoped router. Fixed in commit `0c97027` by adding `router.use(express.json())` explicitly.
+3. **LLM responses not pure JSON.** The agent wrapped its output in markdown code fences (or added prose) even though the system message said "only JSON". Fixed in commit `6cb7f8e` by adding a tolerant JSON parser that strips ` ```json ` fences and extracts arrays/objects from prose-surrounded text.
+
+The two backend gotchas have permanent fixes in the codebase. The build-script
+gotcha will be addressed in a follow-up commit.
+
+---
+
 ## File Structure
 
 | Path | Action | Purpose |

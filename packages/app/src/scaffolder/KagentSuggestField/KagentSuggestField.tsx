@@ -97,14 +97,9 @@ export function KagentSuggestField(props: KagentSuggestFieldProps) {
   const formData = props.formContext?.formData ?? {};
   const targetArray = (formData[opts.targetField] as any[]) ?? [];
 
-  // TEMP DIAGNOSTIC — remove after Layer 2 validation passes.
-  // eslint-disable-next-line no-console
-  console.log('[KagentSuggest] uiSchema=', JSON.stringify(props.uiSchema), 'opts=', JSON.stringify(opts), 'formContext.formData keys=', Object.keys(formData));
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionEntry[]>([]);
-  const [lastSentBody, setLastSentBody] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // Cleanup any in-flight fetch on unmount.
@@ -133,22 +128,16 @@ export function KagentSuggestField(props: KagentSuggestFieldProps) {
 
     const prompt = renderPrompt(opts.promptTemplate, formData);
 
-    // TEMP DIAGNOSTIC — capture what we actually send.
-    const requestBody = JSON.stringify({
-      agentName: opts.agent,
-      prompt,
-      expectJson: true,
-      timeoutMs: opts.timeoutMs ?? 60_000,
-    });
-    setLastSentBody(requestBody);
-    // eslint-disable-next-line no-console
-    console.log('[KagentSuggest] POST body:', requestBody);
-
     try {
       const res = await fetch('/api/kagent-suggest/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: requestBody,
+        body: JSON.stringify({
+          agentName: opts.agent,
+          prompt,
+          expectJson: true,
+          timeoutMs: opts.timeoutMs ?? 60_000,
+        }),
         signal: controller.signal,
       });
 
@@ -242,12 +231,6 @@ export function KagentSuggestField(props: KagentSuggestFieldProps) {
         <Paper className={classes.alert} elevation={0} role="alert">
           <Typography color="error">
             {ERROR_MESSAGES[error.code] ?? `${error.code}: ${error.message}`}
-          </Typography>
-          {/* TEMP DIAGNOSTIC — remove after Layer 2 validation passes. */}
-          <Typography variant="caption" component="pre" style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>
-            Diagnostic — opts: {JSON.stringify(opts)}{'\n'}
-            uiSchema keys: {Object.keys(props.uiSchema ?? {}).join(', ')}{'\n'}
-            Sent body: {lastSentBody ?? '(none captured)'}
           </Typography>
         </Paper>
       )}
