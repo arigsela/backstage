@@ -11,7 +11,7 @@
  *
  * Companion spec: docs/superpowers/specs/2026-05-21-kagent-suggest-field-design.md
  */
-import { Router } from 'express';
+import express, { Router } from 'express';
 import type { DiscoveryService, LoggerService } from '@backstage/backend-plugin-api';
 import {
   AgentInvocationError,
@@ -29,8 +29,18 @@ export async function createRouter(opts: {
   const { discovery, logger } = opts;
   const router = Router();
 
+  // Explicit JSON body parser. Backstage's httpRouter normally provides one
+  // globally, but in this codebase req.body arrives as undefined for our
+  // plugin's routes — confirmed via diagnostic. Applying our own parser is
+  // idempotent and removes the dependency on backend internals.
+  router.use(express.json());
+
   router.post('/invoke', async (req, res) => {
     const startedAt = Date.now();
+
+    logger.info(
+      `kagent-suggest — received POST /invoke body keys=[${Object.keys(req.body ?? {}).join(',')}]`,
+    );
 
     // 1. Input validation. The route caps timeout at 120s (vs the action's
     // 300s) because users are waiting interactively — anything longer is
