@@ -17,6 +17,7 @@ import {
   AgentInvocationError,
   invokeAgent,
   resolveAgent,
+  tolerantParseJson,
   validateInvokeInput,
 } from '../kagent-shared';
 
@@ -81,8 +82,11 @@ export async function createRouter(opts: {
       let response: unknown = text;
       if (expectJson) {
         try {
-          response = JSON.parse(text);
+          response = tolerantParseJson(text);
         } catch (e: any) {
+          logger.warn(
+            `kagent-suggest — INVALID_RESPONSE_JSON from ${inputs.name}; raw response (first 500): ${text.slice(0, 500)}`,
+          );
           res.status(200).json({
             ok: false,
             code: 'INVALID_RESPONSE_JSON',

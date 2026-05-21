@@ -5,3 +5,4 @@ export { invokeAgent } from './invoker';
 export type { InvokeOptions } from './invoker';
 export { validateInvokeInput } from './validation';
 export type { ValidatedInput } from './validation';
+export { tolerantParseJson } from './jsonParse';
