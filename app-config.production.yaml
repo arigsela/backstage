@@ -104,12 +104,6 @@ catalog:
       rules:
         - allow: [Template]
 
-    # CrewAI multi-agent project template
-    - type: file
-      target: ./examples/templates/crewai-agent/template.yaml
-      rules:
-        - allow: [Template]
-
     # Application (Crossplane) — onboard a container image as a managed app.
     # See: examples/templates/application/template.yaml
     - type: file
