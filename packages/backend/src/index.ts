@@ -104,6 +104,18 @@ backend.add(
 backend.add(import('./modules/scaffolder'));
 
 /**
+ * KAGENT-SUGGEST BACKEND PLUGIN
+ *
+ * HTTP route POST /api/kagent-suggest/invoke — called by the KagentSuggest
+ * frontend field during scaffolder wizard form-fill to get AI-generated
+ * suggestions from a kagent agent. Shares the kagent-shared library with the
+ * kagent:agent:invoke scaffolder action.
+ *
+ * See: packages/backend/src/modules/kagent-suggest/ for implementation.
+ */
+backend.add(import('./modules/kagent-suggest'));
+
+/**
  * TERASKY SCAFFOLDER UTILITIES
  * Provides additional scaffolder actions from TeraSky for working with
  * Crossplane resources and Kubernetes manifests in scaffolder templates.
