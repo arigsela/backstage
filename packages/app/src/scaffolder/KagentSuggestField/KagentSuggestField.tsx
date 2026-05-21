@@ -93,9 +93,13 @@ interface SuggestionEntry {
 
 export function KagentSuggestField(props: KagentSuggestFieldProps) {
   const classes = useStyles();
-  const opts = props.uiSchema['ui:options'];
+  const opts = (props.uiSchema?.['ui:options'] ?? {}) as KagentSuggestOptions;
   const formData = props.formContext?.formData ?? {};
   const targetArray = (formData[opts.targetField] as any[]) ?? [];
+
+  // TEMP DIAGNOSTIC — remove after Layer 2 validation passes.
+  // eslint-disable-next-line no-console
+  console.log('[KagentSuggest] uiSchema=', JSON.stringify(props.uiSchema), 'opts=', JSON.stringify(opts), 'formContext.formData keys=', Object.keys(formData));
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
@@ -231,6 +235,11 @@ export function KagentSuggestField(props: KagentSuggestFieldProps) {
         <Paper className={classes.alert} elevation={0} role="alert">
           <Typography color="error">
             {ERROR_MESSAGES[error.code] ?? `${error.code}: ${error.message}`}
+          </Typography>
+          {/* TEMP DIAGNOSTIC — remove after Layer 2 validation passes. */}
+          <Typography variant="caption" component="pre" style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>
+            Diagnostic — opts: {JSON.stringify(opts)}{'\n'}
+            uiSchema keys: {Object.keys(props.uiSchema ?? {}).join(', ')}
           </Typography>
         </Paper>
       )}
