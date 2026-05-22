@@ -37,6 +37,55 @@ gotcha will be addressed in a follow-up commit.
 
 ---
 
+## Post-Refactor Verification (2026-05-22)
+
+After the Layer 2 result above surfaced a fourth gotcha — the
+`formContext.onChange is not a function` runtime error — the field was
+refactored (spec amendment 2026-05-21, commit `bf66221`) so that the
+field owns its own array value via rjsf's standard `props.onChange`.
+
+Verified end-to-end via Playwright against the deployed v1.2.0 image
+on 2026-05-22.
+
+| Step | Result |
+| --- | --- |
+| Field renders on Skills page | ✅ `[Suggest skills]` button + `0 items added` summary |
+| First Suggest click (description: "An agent that helps customers troubleshoot login and account access issues.") | ✅ 3 contextually-relevant suggestions returned within ~10s |
+| Click Add on first suggestion (`account-verification`) | ✅ Counter `0 items added` → `1 item added`; row vanishes from preview; 2 remain |
+| Second Suggest click (with 1 item already added) | ✅ Returns 3 NEW suggestions; `account-verification` not repeated — anti-dup confirmed |
+| Skills → Resources → Publish → Review navigation | ✅ No schema validation errors after a fresh page load |
+| Review page | ✅ Added skill appears as `{id, name, description}` object, ready for submit |
+
+Test agent suggestions (from `skill-suggester`):
+
+```
+Round 1 (description-based):
+  - account-verification — Account Verification
+  - password-reset-assistance — Password Reset Assistance
+  - access-restoration — Access Restoration
+
+Round 2 (after adding account-verification; "do NOT duplicate" suffix attached):
+  - 3 NEW suggestions, none matching account-verification
+```
+
+### One known artifact
+
+When navigating back-and-forth through the wizard in a browser tab
+that previously loaded the OLD field shape (`type: string` +
+`title: "AI assist (optional)"`), rjsf surfaces a stale validation
+error: `'AI assist (optional)' must be string`. A hard refresh
+(Cmd-Shift-R) clears it permanently. Fresh browser sessions don't see
+it.
+
+### What still works
+
+All 48 unit tests on the branch remain green (36 backend + 12 frontend).
+The component refactor traded 11 minor test updates for 5 new
+behaviors (count summary, anti-dup, vanishing rows, no formContext mock,
+singular/plural copy) without losing coverage.
+
+---
+
 ## File Structure
 
 | Path | Action | Purpose |
