@@ -116,13 +116,13 @@ spec:
         discover this agent's capabilities. Leave empty if you don't need
         the agent to advertise itself.
       properties:
-        skillSuggest:
-          type: string
-          title: AI assist (optional)
+        skills:
+          title: A2A skills
+          type: array
+          default: []
           ui:field: KagentSuggest
           ui:options:
             agent: skill-suggester
-            targetField: skills
             promptTemplate: |
               Suggest 3 A2A skills for a kagent agent described as:
               "{{ description }}"
@@ -139,34 +139,6 @@ spec:
             buttonLabel: Suggest skills
             maxSuggestions: 3
             timeoutMs: 60000
-        skills:
-          title: Skills
-          type: array
-          default: []
-          items:
-            type: object
-            required: [id, name, description]
-            properties:
-              id:
-                type: string
-                title: Skill ID (kebab-case)
-                pattern: "^[a-z][a-z0-9-]*$"
-              name:
-                type: string
-                title: Display name
-              description:
-                type: string
-                title: Description (one sentence)
-              examples:
-                type: array
-                title: Example prompts
-                items:
-                  type: string
-              tags:
-                type: array
-                title: Tags
-                items:
-                  type: string
 
     # --- WIZARD PAGE 4: Resources (optional, all defaulted) ---
     - title: Resources (optional)

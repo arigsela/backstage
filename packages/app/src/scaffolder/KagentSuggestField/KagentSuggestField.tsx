@@ -1,13 +1,20 @@
 /**
  * KagentSuggest scaffolder field — calls a kagent agent during wizard form-fill
- * and lets the user accept suggestions item-by-item into a target form array.
+ * and lets the user accept suggestions item-by-item.
+ *
+ * The field IS the array (e.g. the Skills array). Its formData is the
+ * SkillItem[] and props.onChange(newArray) updates form state. Drop-in
+ * replacement for the rjsf default array editor on any list-shaped property.
+ *
+ * UX:
+ *   - Empty state: button + "0 items added" summary
+ *   - Click Suggest: agent returns N suggestions, rendered as editable preview rows
+ *   - Click Add on a row: item appended to form state, row vanishes from preview
+ *   - Re-clicking Suggest with items already added: prompt auto-appended with
+ *     "do NOT duplicate these existing items: [ids]" so the agent gives fresh ideas
  *
  * Companion spec: docs/superpowers/specs/2026-05-21-kagent-suggest-field-design.md
- *
- * IMPORTANT: this field never sets its own form value. It mutates a different
- * form field (specified by ui:options.targetField) via formContext.onChange.
- * The field's own value (the dummy string property in the template schema)
- * stays empty.
+ * (see Amendment section)
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -21,7 +28,6 @@ import {
 
 export interface KagentSuggestOptions {
   agent: string;
-  targetField: string;
   promptTemplate: string;
   watchFields?: string[];
   itemShape: Record<string, 'text' | 'multiline'>;
@@ -31,12 +37,11 @@ export interface KagentSuggestOptions {
 }
 
 export interface KagentSuggestFieldProps {
-  formData: string;
-  onChange: (value: string) => void;
+  formData?: Array<Record<string, string>>;
+  onChange: (value: Array<Record<string, string>>) => void;
   uiSchema: { 'ui:options': KagentSuggestOptions };
   formContext: {
     formData: Record<string, unknown>;
-    onChange: (data: Record<string, unknown>) => void;
   };
 }
 
@@ -61,6 +66,10 @@ const useStyles = makeStyles(theme => ({
   root: { marginBottom: theme.spacing(2) },
   button: { marginRight: theme.spacing(1) },
   loading: { marginLeft: theme.spacing(1), verticalAlign: 'middle' },
+  summary: {
+    marginTop: theme.spacing(1),
+    color: theme.palette.text.secondary,
+  },
   alert: { marginTop: theme.spacing(1), padding: theme.spacing(1.5) },
   preview: { marginTop: theme.spacing(2) },
   previewItem: {
@@ -71,7 +80,6 @@ const useStyles = makeStyles(theme => ({
     gap: theme.spacing(1),
   },
   previewFields: { flex: 1 },
-  added: { color: theme.palette.success.main, marginLeft: theme.spacing(1) },
 }));
 
 function renderPrompt(
@@ -85,24 +93,29 @@ function renderPrompt(
   });
 }
 
-interface SuggestionEntry {
-  data: Record<string, string>;
-  added: boolean;
-  addedAt?: number;
+function buildPromptWithAntiDup(
+  template: string,
+  values: Record<string, unknown>,
+  existingIds: string[],
+): string {
+  const base = renderPrompt(template, values);
+  if (existingIds.length === 0) {
+    return base;
+  }
+  return `${base}\n\nThe user has already added these items (do NOT duplicate them):\n[${existingIds.join(', ')}]`;
 }
 
 export function KagentSuggestField(props: KagentSuggestFieldProps) {
   const classes = useStyles();
   const opts = (props.uiSchema?.['ui:options'] ?? {}) as KagentSuggestOptions;
-  const formData = props.formContext?.formData ?? {};
-  const targetArray = (formData[opts.targetField] as any[]) ?? [];
+  const formContextData = props.formContext?.formData ?? {};
+  const currentItems = Array.isArray(props.formData) ? props.formData : [];
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
-  const [suggestions, setSuggestions] = useState<SuggestionEntry[]>([]);
+  const [suggestions, setSuggestions] = useState<Array<Record<string, string>>>([]);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Cleanup any in-flight fetch on unmount.
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
@@ -113,7 +126,7 @@ export function KagentSuggestField(props: KagentSuggestFieldProps) {
     if (loading) return true;
     const watch = opts.watchFields ?? [];
     return watch.some(f => {
-      const v = formData[f];
+      const v = formContextData[f];
       return v == null || (typeof v === 'string' && v.trim() === '');
     });
   })();
@@ -126,7 +139,14 @@ export function KagentSuggestField(props: KagentSuggestFieldProps) {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const prompt = renderPrompt(opts.promptTemplate, formData);
+    const existingIds = currentItems
+      .map(item => String(item.id ?? ''))
+      .filter(id => id.length > 0);
+    const prompt = buildPromptWithAntiDup(
+      opts.promptTemplate,
+      formContextData,
+      existingIds,
+    );
 
     try {
       const res = await fetch('/api/kagent-suggest/invoke', {
@@ -161,52 +181,37 @@ export function KagentSuggestField(props: KagentSuggestFieldProps) {
         .map(item => {
           const entry: Record<string, string> = {};
           for (const k of expectedKeys) entry[k] = String(item[k] ?? '');
-          return { data: entry, added: false } as SuggestionEntry;
+          return entry;
         });
 
       setSuggestions(filtered);
     } catch (e: any) {
-      if (e?.name === 'AbortError') return; // unmounted
+      if (e?.name === 'AbortError') return;
       setError({ code: 'BAD_INPUT', message: e.message ?? String(e) });
       setSuggestions([]);
     } finally {
       setLoading(false);
     }
-  }, [opts, formData]);
+  }, [opts, formContextData, currentItems]);
 
   const handleEditSuggestion = (idx: number, key: string, value: string) => {
     setSuggestions(prev => {
       const next = [...prev];
-      next[idx] = {
-        ...next[idx],
-        data: { ...next[idx].data, [key]: value },
-      };
+      next[idx] = { ...next[idx], [key]: value };
       return next;
     });
   };
 
   const handleAdd = (idx: number) => {
     const entry = suggestions[idx];
-    const newArr = [...targetArray, entry.data];
-    props.formContext.onChange({
-      ...formData,
-      [opts.targetField]: newArr,
-    });
-
-    // Mark as added for 2 seconds.
-    setSuggestions(prev => {
-      const next = [...prev];
-      next[idx] = { ...next[idx], added: true, addedAt: Date.now() };
-      return next;
-    });
-    setTimeout(() => {
-      setSuggestions(prev => {
-        const next = [...prev];
-        if (next[idx]) next[idx] = { ...next[idx], added: false };
-        return next;
-      });
-    }, 2000);
+    props.onChange([...currentItems, entry]);
+    // Remove the added row from preview immediately.
+    setSuggestions(prev => prev.filter((_, i) => i !== idx));
   };
+
+  const count = currentItems.length;
+  const summary =
+    count === 0 ? '0 items added' : `${count} item${count === 1 ? '' : 's'} added`;
 
   return (
     <div className={classes.root}>
@@ -227,6 +232,10 @@ export function KagentSuggestField(props: KagentSuggestFieldProps) {
         />
       )}
 
+      <Typography variant="body2" className={classes.summary}>
+        {summary}
+      </Typography>
+
       {error && (
         <Paper className={classes.alert} elevation={0} role="alert">
           <Typography color="error">
@@ -245,7 +254,7 @@ export function KagentSuggestField(props: KagentSuggestFieldProps) {
                   <TextField
                     key={key}
                     label={key}
-                    value={entry.data[key]}
+                    value={entry[key]}
                     onChange={e => handleEditSuggestion(idx, key, e.target.value)}
                     fullWidth
                     multiline={kind === 'multiline'}
@@ -261,11 +270,6 @@ export function KagentSuggestField(props: KagentSuggestFieldProps) {
               >
                 Add
               </Button>
-              {entry.added && (
-                <Typography variant="caption" className={classes.added}>
-                  ✓ Added
-                </Typography>
-              )}
             </Paper>
           ))}
         </div>
