@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Offline renderer for the kagent-agent scaffolder template.
-// Usage: node render.js <fixture.json> > rendered.yaml
+// Offline renderer for kagent scaffolder templates.
+// Usage: node render.js <template-path> <fixture.json> > rendered.yaml
+//        node render.js <fixture.json>                  # agent template (back-compat)
 //
 // Mirrors Backstage scaffolder's Nunjucks setup:
 //   - Custom variable tags: ${{ ... }} (not {{ ... }})
