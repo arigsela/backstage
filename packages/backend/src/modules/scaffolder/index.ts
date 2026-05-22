@@ -15,6 +15,8 @@
  * - kagent:agent:validate-name — Fails the wizard on kagent agent name collisions
  * - kagent:agent:open-decommission-pr — Opens a teardown PR for an IDP-managed kagent Agent
  * - kagent:agent:invoke — Synchronously calls a kagent.dev Agent via the A2A protocol
+ * - kagent:mcp-server:validate-name — Fails the wizard on MCPServer name collisions
+ * - kagent:mcp-server:open-decommission-pr — Opens a teardown PR for an IDP-managed MCPServer
  */
 
 import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
@@ -27,6 +29,8 @@ import { createDecommissionPullRequestAction } from './decommissionPullRequestAc
 import { createKagentValidateNameAction } from './kagentValidateNameAction';
 import { createKagentDecommissionAction } from './kagentDecommissionAction';
 import { createKagentInvokeAction } from './kagentInvokeAction';
+import { createKagentMcpServerValidateNameAction } from './kagentMcpServerValidateNameAction';
+import { createKagentMcpServerDecommissionAction } from './kagentMcpServerDecommissionAction';
 
 
 const scaffolderCustomActionsModule = createBackendModule({
@@ -48,6 +52,8 @@ const scaffolderCustomActionsModule = createBackendModule({
           createDecommissionPullRequestAction(),
           createKagentValidateNameAction(),
           createKagentDecommissionAction(),
+          createKagentMcpServerValidateNameAction(),
+          createKagentMcpServerDecommissionAction(),
           createKagentInvokeAction({ discovery }),
         );
       },

@@ -125,10 +125,24 @@ catalog:
       rules:
         - allow: [Template]
 
+    # Kagent MCP Server — deploy a kmcp MCPServer CRD (server-everything, github, custom).
+    # See: examples/templates/kagent-mcp-server/template.yaml
+    - type: file
+      target: ./examples/templates/kagent-mcp-server/template.yaml
+      rules:
+        - allow: [Template]
+
     # Decommission Kagent Agent — tear down an IDP-managed kagent agent.
     # See: examples/templates/kagent-agent-decommission/template.yaml
     - type: file
       target: ./examples/templates/kagent-agent-decommission/template.yaml
+      rules:
+        - allow: [Template]
+
+    # Decommission Kagent MCP Server — tear down an IDP-managed kagent MCPServer.
+    # See: examples/templates/kagent-mcp-server-decommission/template.yaml
+    - type: file
+      target: ./examples/templates/kagent-mcp-server-decommission/template.yaml
       rules:
         - allow: [Template]
 

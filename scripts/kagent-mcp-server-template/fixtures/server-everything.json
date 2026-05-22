@@ -1,0 +1,20 @@
+{
+  "name": "everything-test",
+  "description": "Reference MCP server used to smoke-test the template.",
+  "owner": "group:default/platform-engineering",
+  "preset": "server-everything",
+  "githubToolsets": [],
+  "image": "",
+  "cmd": "",
+  "args": [],
+  "transportType": "stdio",
+  "port": null,
+  "extraEnv": [],
+  "vaultSecrets": [],
+  "vaultPath": "",
+  "vaultTokenKey": "",
+  "cpuRequest": "100m",
+  "cpuLimit": "500m",
+  "memoryRequest": "128Mi",
+  "memoryLimit": "512Mi"
+}

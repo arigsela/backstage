@@ -1,0 +1,94 @@
+apiVersion: kagent.dev/v1alpha1
+kind: MCPServer
+metadata:
+  name: ${{ values.name }}
+  namespace: kagent
+  labels:
+    app.kubernetes.io/part-of: kagent
+    app.kubernetes.io/managed-by: kagent
+    app.kubernetes.io/name: ${{ values.name }}
+    arigsela.com/idp-managed: "true"
+  annotations:
+    backstage.io/managed-by-location: url:https://github.com/arigsela/kubernetes/blob/main/base-apps/kagent/mcp-servers/${{ values.name }}/mcpserver.yaml
+    backstage.io/owner: ${{ values.owner }}
+spec:
+{%- if values.preset == "server-everything" %}
+  transportType: stdio
+  deployment:
+    cmd: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-everything@latest"
+    resources:
+      requests:
+        cpu: ${{ values.cpuRequest }}
+        memory: ${{ values.memoryRequest }}
+      limits:
+        cpu: ${{ values.cpuLimit }}
+        memory: ${{ values.memoryLimit }}
+{%- elif values.preset == "github-mcp-server" %}
+  transportType: streamable_http
+  deployment:
+    port: 8080
+    image: ghcr.io/github/github-mcp-server:latest
+    cmd: /server/github-mcp-server
+    args:
+      - http
+      - "--port=8080"
+    env:
+      - name: GITHUB_PERSONAL_ACCESS_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: ${{ values.name }}-github-token
+            key: github-token
+{%- if values.githubToolsets and values.githubToolsets | length > 0 %}
+      - name: GITHUB_TOOLSETS
+        value: "${{ values.githubToolsets | join(',') }}"
+{%- endif %}
+    resources:
+      requests:
+        cpu: ${{ values.cpuRequest }}
+        memory: ${{ values.memoryRequest }}
+      limits:
+        cpu: ${{ values.cpuLimit }}
+        memory: ${{ values.memoryLimit }}
+{%- elif values.preset == "custom" %}
+  transportType: ${{ values.transportType }}
+  deployment:
+{%- if values.image %}
+    image: ${{ values.image }}
+{%- endif %}
+    cmd: ${{ values.cmd }}
+{%- if values.args and values.args | length > 0 %}
+    args:
+{%- for a in values.args %}
+      - ${{ a | dump }}
+{%- endfor %}
+{%- endif %}
+{%- if values.transportType != "stdio" and values.port %}
+    port: ${{ values.port }}
+{%- endif %}
+{%- set has_extra = values.extraEnv and (values.extraEnv | length > 0) %}
+{%- set has_vault = values.vaultSecrets and (values.vaultSecrets | length > 0) %}
+{%- if has_extra or has_vault %}
+    env:
+{%- for e in values.extraEnv %}
+      - name: ${{ e.name }}
+        value: ${{ e.value | dump }}
+{%- endfor %}
+{%- for s in values.vaultSecrets %}
+      - name: ${{ s.envName }}
+        valueFrom:
+          secretKeyRef:
+            name: ${{ values.name }}-secrets
+            key: ${{ s.envName | lower }}
+{%- endfor %}
+{%- endif %}
+    resources:
+      requests:
+        cpu: ${{ values.cpuRequest }}
+        memory: ${{ values.memoryRequest }}
+      limits:
+        cpu: ${{ values.cpuLimit }}
+        memory: ${{ values.memoryLimit }}
+{%- endif %}
