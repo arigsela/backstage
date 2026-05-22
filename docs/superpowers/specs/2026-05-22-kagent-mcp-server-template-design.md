@@ -167,8 +167,10 @@ metadata:
   name: <name>
   namespace: kagent
   labels:
-    app.kubernetes.io/managed-by: backstage-idp
-    backstage.io/source: scaffolder
+    app.kubernetes.io/part-of: kagent
+    app.kubernetes.io/managed-by: kagent
+    app.kubernetes.io/name: <name>
+    arigsela.com/idp-managed: "true"
     backstage.io/owner: <owner>
 spec:
   transportType: stdio
@@ -192,8 +194,10 @@ metadata:
   name: <name>
   namespace: kagent
   labels:
-    app.kubernetes.io/managed-by: backstage-idp
-    backstage.io/source: scaffolder
+    app.kubernetes.io/part-of: kagent
+    app.kubernetes.io/managed-by: kagent
+    app.kubernetes.io/name: <name>
+    arigsela.com/idp-managed: "true"
     backstage.io/owner: <owner>
 spec:
   transportType: streamable_http
@@ -224,8 +228,9 @@ metadata:
   name: <name>-github-token
   namespace: kagent
   labels:
-    app.kubernetes.io/managed-by: backstage-idp
-    backstage.io/source: scaffolder
+    app.kubernetes.io/part-of: kagent
+    app.kubernetes.io/name: <name>
+    arigsela.com/idp-managed: "true"
 spec:
   refreshInterval: 1h
   secretStoreRef:
@@ -257,8 +262,9 @@ metadata:
   name: <name>-secrets
   namespace: kagent
   labels:
-    app.kubernetes.io/managed-by: backstage-idp
-    backstage.io/source: scaffolder
+    app.kubernetes.io/part-of: kagent
+    app.kubernetes.io/name: <name>
+    arigsela.com/idp-managed: "true"
 spec:
   refreshInterval: 1h
   secretStoreRef:
@@ -382,7 +388,8 @@ Adapts `kagentDecommissionAction.ts` (278 lines). Differences:
   `deleteFile` runs for each entry. The agent action only ever deletes one
   file; this is the one real behavior change.
 - **IDP-management guard.** Reads each YAML before deleting and refuses if
-  `app.kubernetes.io/managed-by: backstage-idp` label is absent.
+  `arigsela.com/idp-managed: "true"` label is absent. Matches the regex check
+  in `kagentDecommissionAction.ts`.
 - **Best-effort consumer warning.** Greps agent manifests in the repo for
   `tools[].mcpServer.name == <name>`. If any are found, the PR body lists
   them as a "still-referenced" warning without blocking.
