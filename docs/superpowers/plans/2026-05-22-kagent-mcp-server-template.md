@@ -1102,7 +1102,9 @@ mkdir -p 'examples/templates/kagent-mcp-server/content/with-secret/base-apps/kag
 
 - [ ] **Step 2: Write the externalsecret template**
 
-Create `examples/templates/kagent-mcp-server/content/with-secret/base-apps/kagent/mcp-servers/${{ values.name }}/externalsecret.yaml`. Replace `<CSS-NAME>` below with the value from Task 0 lookup's "ClusterSecretStore" heading.
+Create `examples/templates/kagent-mcp-server/content/with-secret/base-apps/kagent/mcp-servers/${{ values.name }}/externalsecret.yaml`.
+
+**Important correction from Task 0 lookups:** The cluster has no `ClusterSecretStore` resources. It uses a **namespaced `SecretStore` named `vault-backend`**, one per consuming namespace (verified in `kagent` namespace and in `arigsela/kubernetes:base-apps/kagent/secret-store.yaml`). So the rendered ExternalSecret uses `kind: SecretStore` (not `ClusterSecretStore`) with name `vault-backend`.
 
 ```yaml
 apiVersion: external-secrets.io/v1beta1
@@ -1123,8 +1125,8 @@ metadata:
 spec:
   refreshInterval: 1h
   secretStoreRef:
-    name: <CSS-NAME>
-    kind: ClusterSecretStore
+    name: vault-backend
+    kind: SecretStore
   target:
 {%- if values.preset == "github-mcp-server" %}
     name: ${{ values.name }}-github-token
