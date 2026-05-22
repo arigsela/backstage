@@ -31,9 +31,10 @@ spec:
   deployment:
     port: 8080
     image: ghcr.io/github/github-mcp-server:latest
-    # cmd/args resolved from Task 0 lookup — fill in before merge.
-    cmd: ""
-    args: []
+    cmd: /server/github-mcp-server
+    args:
+      - http
+      - "--port=8080"
     env:
       - name: GITHUB_PERSONAL_ACCESS_TOKEN
         valueFrom:

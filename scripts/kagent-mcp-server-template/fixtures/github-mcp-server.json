@@ -1,0 +1,20 @@
+{
+  "name": "github-pr-bot",
+  "description": "GitHub MCP server for PR and issue operations.",
+  "owner": "group:default/platform-engineering",
+  "preset": "github-mcp-server",
+  "githubToolsets": ["repos", "issues", "pull_requests"],
+  "image": "",
+  "cmd": "",
+  "args": [],
+  "transportType": "streamable_http",
+  "port": 8080,
+  "extraEnv": [],
+  "vaultSecrets": [],
+  "vaultPath": "kagent/mcp-servers/github-pr-bot",
+  "vaultTokenKey": "github-token",
+  "cpuRequest": "100m",
+  "cpuLimit": "500m",
+  "memoryRequest": "128Mi",
+  "memoryLimit": "512Mi"
+}
