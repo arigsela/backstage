@@ -5,11 +5,157 @@
 > get AI-generated suggestions (skills, descriptions, system messages,
 > anything) and accept them into the form before submitting.
 >
-> **Status:** Approved design — implementation plan to follow.
+> **Status:** Approved design — implementation plan to follow. **Amended
+> 2026-05-21** after Layer 2 validation revealed that
+> `formContext.onChange` is not available — see Amendment section
+> directly below.
 > **Date:** 2026-05-21.
 > **Author:** Ari Sela (with Claude).
 > **Companion spec:** `docs/superpowers/specs/2026-05-20-kagent-invoke-scaffolder-action-design.md`.
 > **Companion guide:** `docs/guides/scaffolder-action-kagent-invoke.md`.
+
+---
+
+## Amendment (2026-05-21): field owns the value
+
+Layer 2 validation revealed that Backstage's `formContext` does NOT
+expose a form-mutation `onChange` method — only metadata. The original
+design's "separate `skillSuggest` field that writes to `skills` via
+`formContext.onChange`" pattern is impossible. **Refactor the field to
+BE the skills array directly, owning its own value via rjsf's standard
+`props.onChange`.**
+
+This amendment supersedes Sections 3, 5, 6, 7, and 8 of the original
+design where they conflict. Other sections (1, 2, 4, 9, 10) remain
+valid.
+
+### Architecture (replaces §3 unit layout)
+
+The field's `formData` is `SkillItem[]`. `props.onChange(newArray)`
+updates form state. Drop `targetField` from `ui:options` entirely.
+Template uses a single property (e.g. `skills`) with
+`ui:field: KagentSuggest` — replaces the previous `skillSuggest` +
+`skills` two-property pattern.
+
+### UX flow
+
+```
+Initial state:
+┌─ AI assist ─────────────────────────────┐
+│  [ Suggest skills ]                     │
+│  0 skills added                         │
+└─────────────────────────────────────────┘
+
+After clicking Suggest:
+┌─ AI assist ─────────────────────────────┐
+│  [ Suggest skills ]                     │
+│  0 skills added                         │
+│                                         │
+│  Suggestions:                           │
+│  ┌───────────────────┐ ┌─────┐           │
+│  │ id: ...           │ │ Add │           │
+│  │ name: ...         │ └─────┘           │
+│  │ description: ...  │                   │
+│  └───────────────────┘                   │
+│  ┌───────────────────┐ ┌─────┐           │
+│  │ id: ...           │ │ Add │           │
+│  └───────────────────┘                   │
+└─────────────────────────────────────────┘
+
+After clicking Add on the first row:
+  - That row disappears from the preview
+  - Summary updates: "1 skill added"
+  - Form state's skills array grows by one
+```
+
+**No inline editing of added items.** Suggestions can be edited in
+their textboxes BEFORE Add. After Add, items are committed to form
+state and only visible via the count summary. Recovery from accidental
+adds is via the Review-page editor.
+
+### `ui:options` contract (replaces §5 contract table)
+
+| Key | Type | Required | Description |
+| --- | --- | --- | --- |
+| `agent` | string | yes | Catalog name of the agent to call. |
+| ~~`targetField`~~ | — | — | **REMOVED.** Field writes to its own value. |
+| `promptTemplate` | string | yes | Mustache `{{ field }}` placeholders interpolated from `formContext.formData`. |
+| `watchFields` | string[] | no | Disable button until all listed fields are non-empty. |
+| `itemShape` | object | yes | `{key: 'text' \| 'multiline'}` — drives preview-row rendering. |
+| `buttonLabel` | string | no | Default `"Suggest"`. |
+| `maxSuggestions` | integer | no | Default 10. |
+| `timeoutMs` | integer | no | Default 60000. |
+
+### Anti-duplicate prompt logic (new behavior)
+
+When `formData.length > 0`, the field auto-appends to the rendered
+prompt:
+
+```
+\n\nThe user has already added these items (do NOT duplicate them):
+[<comma-separated list of ids>]
+```
+
+Hard-coded — no template-author opt-in needed. Phrasing is neutral
+enough for any list-shaped use case. The list uses the `id` key from
+each item (which the spec already requires as the first property of
+`itemShape` for the skills use case).
+
+### Add behavior (replaces §6 "After Add" subsection)
+
+1. Append item (with any edits made in the preview textboxes) to the field's value via `props.onChange([...formData, item])`.
+2. Remove that item from the preview state immediately.
+3. No "✓ Added" badge (the row is gone; the count summary moved up by one).
+4. Suggestions stay if other rows remain. User can click Suggest again — fresh request with the new existing-items context.
+
+### Template change (replaces §5 template usage example)
+
+```yaml
+properties:
+  skills:
+    type: array
+    title: A2A skills
+    default: []
+    ui:field: KagentSuggest
+    ui:options:
+      agent: skill-suggester
+      promptTemplate: |
+        Suggest 3 A2A skills for a kagent agent described as:
+        "{{ description }}"
+        Respond with ONLY a JSON array of exactly 3 objects, each with:
+          - id: kebab-case identifier
+          - name: Title Case display name
+          - description: one-sentence summary
+        No prose. No markdown. Just the JSON array.
+      watchFields: [description]
+      itemShape:
+        id: text
+        name: text
+        description: text
+      buttonLabel: Suggest skills
+      maxSuggestions: 3
+      timeoutMs: 60000
+```
+
+Note: `items: { ... }` schema is no longer needed. The field renders
+and validates items itself. Type stays `array` so the submit shape
+matches the downstream `${{ parameters.skills }}` interpolation.
+
+### Test updates (replaces §7 Layer 2 frontend test list)
+
+Still 12 tests total — most are minor edits:
+
+- Drop `formContext.onChange` mock usage everywhere → use `props.onChange`.
+- Tests #7 (Add button) and #8 (Add twice) assert on `props.onChange`.
+- Drop test #11 (edit-then-Add of already-added items) — no inline editing in new design. Replace with: edit-suggestion-before-Add commits edited values.
+- **New** test: anti-dup suffix appended when `formData` is non-empty.
+- **New** test: clicked row vanishes from preview after Add.
+- **New** test: empty state shows "0 skills added" / non-empty state shows "N skill(s) added".
+
+### Out of scope (unchanged)
+
+Streaming, multi-turn, modal preview, caching, auto-debounce, in-field
+editing/deleting of added items, per-user permissions, telemetry.
 
 ---
 
