@@ -1,0 +1,52 @@
+# ==============================================================================
+# Kagent MCP Server — Decommission
+# ==============================================================================
+#
+# Opens a teardown PR that removes a Backstage-managed kagent kmcp MCPServer
+# (and its ExternalSecret, if present). Refuses to delete servers that don't
+# carry the arigsela.com/idp-managed label.
+#
+# Companion spec: docs/superpowers/specs/2026-05-22-kagent-mcp-server-template-design.md
+# ==============================================================================
+
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: kagent-mcp-server-decommission
+  title: Decommission Kagent MCP Server
+  description: >-
+    Opens a teardown PR that removes a Backstage-managed kagent MCPServer
+    (and its ExternalSecret). Refuses to delete servers that are not
+    IDP-managed.
+  tags:
+    - kagent
+    - mcp-server
+    - decommission
+
+spec:
+  owner: group:platform-engineering
+  type: service
+
+  parameters:
+    - title: Identity
+      required: [name]
+      properties:
+        name:
+          type: string
+          title: MCP server name to tear down
+          description: >-
+            Must match an existing IDP-managed MCP server under
+            base-apps/kagent/mcp-servers/.
+          pattern: "^[a-z][a-z0-9-]{2,38}[a-z0-9]$"
+
+  steps:
+    - id: publish
+      name: Open teardown PR
+      action: kagent:mcp-server:open-decommission-pr
+      input:
+        name: ${{ parameters.name | trim }}
+
+  output:
+    links:
+      - title: Teardown PR
+        url: ${{ steps.publish.output.remoteUrl }}

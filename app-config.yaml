@@ -266,6 +266,13 @@ catalog:
       rules:
         - allow: [Template]
 
+    # Decommission Kagent MCP Server — tear down an IDP-managed kagent MCPServer.
+    # See: examples/templates/kagent-mcp-server-decommission/template.yaml
+    - type: file
+      target: ../../examples/templates/kagent-mcp-server-decommission/template.yaml
+      rules:
+        - allow: [Template]
+
     # Example organizational data: users and groups (see examples/org.yaml)
     - type: file
       target: ../../examples/org.yaml
