@@ -1,4 +1,0 @@
-site_name: CrewAI Multi-Agent Project
-docs_dir: docs
-plugins:
-  - techdocs-core

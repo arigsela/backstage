@@ -6,27 +6,18 @@
  * It uses the New Backend System's extension point mechanism to add actions
  * to the scaffolder plugin.
  *
- * HOW IT WORKS:
- * 1. Backstage's scaffolder plugin exposes a `scaffolderActionsExtensionPoint`
- * 2. This module declares a dependency on that extension point
- * 3. During initialization, it creates custom actions and registers them
- * 4. The actions then appear in the scaffolder's available actions list
- *
  * REGISTERED ACTIONS:
  * - publish:file — Writes template output to local filesystem (for testing)
- * - aws:ecr:create — Creates ECR repositories for orchestrator + sub-agent images
- * - aws:ecr:build-push — Builds Docker images and pushes them to ECR (legacy, kept for compat)
+ * - aws:ecr:create — Creates ECR repositories
+ * - aws:ecr:build-push — Builds Docker images and pushes them to ECR (legacy)
  * - vault:setup — Creates Vault policy, K8s auth role, and placeholder secrets
  * - crossplane:teardown:open-decommission-pr — Opens a teardown PR for a v1.x IDP app
  * - kagent:agent:validate-name — Fails the wizard on kagent agent name collisions
  * - kagent:agent:open-decommission-pr — Opens a teardown PR for an IDP-managed kagent Agent
- *
- * NOTE: github:actions:dispatch is provided by the built-in
- * @backstage/plugin-scaffolder-backend-module-github package — no custom
- * action needed. It uses the configured GitHub integration credentials.
+ * - kagent:agent:invoke — Synchronously calls a kagent.dev Agent via the A2A protocol
  */
 
-import { createBackendModule } from '@backstage/backend-plugin-api';
+import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
 import { scaffolderActionsExtensionPoint } from '@backstage/plugin-scaffolder-node';
 import { createPublishFileAction } from './publishFileAction';
 import { createEcrCreateAction } from './ecrCreateAction';
@@ -35,29 +26,20 @@ import { createVaultSetupAction } from './vaultSetupAction';
 import { createDecommissionPullRequestAction } from './decommissionPullRequestAction';
 import { createKagentValidateNameAction } from './kagentValidateNameAction';
 import { createKagentDecommissionAction } from './kagentDecommissionAction';
+import { createKagentInvokeAction } from './kagentInvokeAction';
 
 
-/**
- * Backend module that adds custom scaffolder actions.
- *
- * IMPORTANT: The `pluginId` MUST be 'scaffolder' — this tells the backend
- * system that this module extends the scaffolder plugin. If you use a different
- * pluginId, the extension point won't resolve and registration will fail.
- */
 const scaffolderCustomActionsModule = createBackendModule({
-  pluginId: 'scaffolder', // Extends the scaffolder plugin (must match exactly)
-  moduleId: 'custom-actions', // Unique identifier for this module
+  pluginId: 'scaffolder',
+  moduleId: 'custom-actions',
   register({ registerInit }) {
     registerInit({
       deps: {
-        // Request the scaffolder's extension point for registering actions.
-        // The backend DI system ensures this module initializes AFTER the
-        // scaffolder plugin, so the extension point is guaranteed to be ready.
         scaffolderActions: scaffolderActionsExtensionPoint,
+        // kagent:agent:invoke uses discovery to find the local catalog API.
+        discovery: coreServices.discovery,
       },
-      async init({ scaffolderActions }) {
-        // Create and register all custom actions.
-        // Each action becomes available in template.yaml files as its `id`.
+      async init({ scaffolderActions, discovery }) {
         scaffolderActions.addActions(
           createPublishFileAction(),
           createEcrCreateAction(),
@@ -66,6 +48,7 @@ const scaffolderCustomActionsModule = createBackendModule({
           createDecommissionPullRequestAction(),
           createKagentValidateNameAction(),
           createKagentDecommissionAction(),
+          createKagentInvokeAction({ discovery }),
         );
       },
     });

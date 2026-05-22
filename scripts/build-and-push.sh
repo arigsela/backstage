@@ -8,20 +8,33 @@
 # WHAT THIS SCRIPT DOES:
 # 1. Installs dependencies (yarn install --immutable ensures lockfile is respected)
 # 2. Type-checks the project (yarn tsc catches TypeScript errors before building)
-# 3. Builds the backend bundle (yarn build:backend creates the production bundle)
-# 4. Builds the Docker image using the multi-stage Dockerfile
-# 5. Authenticates with ECR (uses AWS CLI credentials from your environment)
-# 6. Tags the image with both a version tag and :latest
-# 7. Pushes both tags to ECR
+# 3. Builds all packages (yarn build:all — frontend + backend; backend bundle
+#    pulls the frontend's static assets into its tar archive)
+# 4. Authenticates with ECR (must happen before push)
+# 5. Builds & pushes the Docker image using buildx, targeting the cluster's
+#    architecture (linux/amd64 by default). Both the version tag and :latest
+#    are produced in a single buildx invocation.
+# 6. Restarts the Kubernetes deployment so it pulls the new image.
 #
 # USAGE:
-#   ./scripts/build-and-push.sh                  # Uses git short SHA as version
-#   ./scripts/build-and-push.sh --version 1.0.0  # Uses explicit version tag
+#   ./scripts/build-and-push.sh                       # Uses git short SHA as version
+#   ./scripts/build-and-push.sh --version v1.0.2      # Explicit version tag
+#   ./scripts/build-and-push.sh --platform linux/arm64 # Override target arch
+#
+# WHY buildx:
+#   The Dockerfile uses BuildKit features (`RUN --mount=type=cache`) and we
+#   build on Apple Silicon while the cluster nodes are amd64. buildx supports
+#   both — it cross-compiles via QEMU/Rosetta and pushes a manifest matching
+#   the requested platform.
 #
 # PREREQUISITES:
 # - AWS CLI configured with credentials that have ECR push access
-# - Docker running
-# - Node.js and Yarn installed (for the build steps)
+# - Docker running (Colima or Docker Desktop) with the buildx CLI plugin
+#     brew install docker-buildx
+#     ln -sfn "$(brew --prefix)/opt/docker-buildx/bin/docker-buildx" \
+#             ~/.docker/cli-plugins/docker-buildx
+# - Node.js and Yarn (Corepack) installed for the build steps
+# - kubectl context pointing at the target cluster
 # ==============================================================================
 
 set -euo pipefail
@@ -33,20 +46,29 @@ ECR_REGISTRY="852893458518.dkr.ecr.us-east-2.amazonaws.com"
 ECR_REPO="backstage-portal"
 AWS_REGION="us-east-2"
 
+# Default target platform for the image. The k3s cluster nodes run amd64,
+# so even when building from an arm64 Mac we must produce an amd64 image,
+# otherwise pods fail with "no match for platform in manifest".
+DEFAULT_PLATFORM="linux/amd64"
+
 # --- Parse Arguments ---
-# Accept an optional --version flag; default to the current git short SHA.
-# Using the git SHA ties each image to a specific commit, making it easy to
-# trace which code is running in production.
+# --version : tag to push (defaults to git short SHA)
+# --platform: docker target platform (defaults to linux/amd64)
 VERSION=""
+PLATFORM="${DEFAULT_PLATFORM}"
 while [[ $# -gt 0 ]]; do
   case $1 in
     --version)
       VERSION="$2"
       shift 2
       ;;
+    --platform)
+      PLATFORM="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown option: $1"
-      echo "Usage: $0 [--version <version>]"
+      echo "Usage: $0 [--version <version>] [--platform <os/arch>]"
       exit 1
       ;;
   esac
@@ -61,10 +83,23 @@ fi
 
 FULL_IMAGE="${ECR_REGISTRY}/${ECR_REPO}"
 
+# --- Preflight: buildx must be installed ---
+# The Dockerfile uses --mount=type=cache (BuildKit-only) and we cross-build
+# for amd64 from arm64 hosts, both of which require the buildx plugin.
+if ! docker buildx version >/dev/null 2>&1; then
+  echo "ERROR: 'docker buildx' is not available."
+  echo "Install it with:"
+  echo "  brew install docker-buildx"
+  echo "  ln -sfn \"\$(brew --prefix)/opt/docker-buildx/bin/docker-buildx\" \\"
+  echo "          ~/.docker/cli-plugins/docker-buildx"
+  exit 1
+fi
+
 echo "============================================"
 echo "Building Backstage Portal"
-echo "  Version: ${VERSION}"
-echo "  Image:   ${FULL_IMAGE}:${VERSION}"
+echo "  Version:  ${VERSION}"
+echo "  Platform: ${PLATFORM}"
+echo "  Image:    ${FULL_IMAGE}:${VERSION}"
 echo "============================================"
 
 # --- Step 1: Install Dependencies ---
@@ -83,43 +118,52 @@ echo ""
 echo ">>> Step 2/6: Type checking..."
 yarn tsc
 
-# --- Step 3: Build Backend ---
-# Creates the production backend bundle in packages/backend/dist/.
-# This is what gets copied into the Docker image.
+# --- Step 3: Build All Packages (frontend + backend) ---
+# Builds every workspace in the repo: packages/app (frontend), packages/backend
+# (server), and any others. Necessary because the backend bundles the frontend's
+# static assets into its image — if we only ran `yarn build:backend`, frontend
+# changes wouldn't reach production. The backend's bundle.tar.gz pulls from
+# packages/app/dist/, which only exists after the app build runs.
 echo ""
-echo ">>> Step 3/6: Building backend..."
-yarn build:backend
+echo ">>> Step 3/6: Building all packages (frontend + backend)..."
+yarn build:all
 
-# --- Step 4: Build Docker Image ---
-# Uses the multi-stage Dockerfile at packages/backend/Dockerfile.
-# The Dockerfile copies the pre-built bundle (not source code),
-# resulting in a smaller, faster image.
-echo ""
-echo ">>> Step 4/6: Building Docker image..."
-docker image build . -f packages/backend/Dockerfile --tag "${ECR_REPO}:latest"
-
-# --- Step 5: Authenticate with ECR ---
+# --- Step 4: Authenticate with ECR ---
 # ECR tokens expire after 12 hours. This command fetches a fresh token
 # from AWS and pipes it to docker login. The AWS CLI uses whatever
 # credentials are in your environment (env vars, ~/.aws/credentials, or IAM role).
+# Login must happen BEFORE the buildx --push step below.
 echo ""
-echo ">>> Step 5/6: Logging in to ECR..."
+echo ">>> Step 4/6: Logging in to ECR..."
 aws ecr get-login-password --region "${AWS_REGION}" | \
   docker login --username AWS --password-stdin "${ECR_REGISTRY}"
 
-# --- Step 6: Tag and Push ---
-# We push two tags:
-# 1. The version tag (e.g., :1.0.0 or :abc1234) for rollback and traceability
-# 2. The :latest tag so Kubernetes can pull the newest image
+# --- Step 5: Build & Push Docker Image (buildx) ---
+# Single buildx invocation that:
+#   * targets ${PLATFORM} (default linux/amd64 to match cluster nodes)
+#   * applies BOTH the version tag and :latest
+#   * pushes directly to ECR (--push) so we never load the cross-arch image
+#     into the local Docker store (which can't run it natively anyway).
+#
+# --provenance=false suppresses the "unknown/unknown" attestation manifest
+# that BuildKit otherwise adds to the index — keeps the manifest list clean
+# with only the platforms we actually built.
 echo ""
-echo ">>> Step 6/7: Tagging and pushing..."
-docker tag "${ECR_REPO}:latest" "${FULL_IMAGE}:${VERSION}"
-docker tag "${ECR_REPO}:latest" "${FULL_IMAGE}:latest"
-docker push "${FULL_IMAGE}:${VERSION}"
-docker push "${FULL_IMAGE}:latest"
+echo ">>> Step 5/6: Building & pushing Docker image (${PLATFORM})..."
+docker buildx build \
+  --platform="${PLATFORM}" \
+  --provenance=false \
+  -f packages/backend/Dockerfile \
+  -t "${FULL_IMAGE}:${VERSION}" \
+  -t "${FULL_IMAGE}:latest" \
+  --push \
+  .
 
+# --- Step 6: Roll Out Deployment ---
+# Restart triggers a fresh pull of :latest (or the pinned version, depending
+# on what the deployment manifest references) and a rolling update.
 echo ""
-echo ">>> Step 7/7: Rolling out deployment..."
+echo ">>> Step 6/6: Rolling out deployment..."
 kubectl rollout restart deployment/backstage -n backstage
 kubectl rollout status deployment/backstage -n backstage --timeout=120s
 

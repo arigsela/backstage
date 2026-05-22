@@ -38,6 +38,9 @@ import {
 
 // Scaffolder: "Create" page — lets users spin up new projects from software templates
 import { ScaffolderPage, scaffolderPlugin } from '@backstage/plugin-scaffolder';
+import { ScaffolderFieldExtensions } from '@backstage/plugin-scaffolder-react';
+// Custom scaffolder field that interactively calls a kagent agent during wizard form-fill.
+import { KagentSuggestFieldExtension } from './scaffolder/KagentSuggestField';
 
 // Org: Displays organizational structure (teams, users, group hierarchy)
 import { orgPlugin } from '@backstage/plugin-org';
@@ -216,7 +219,11 @@ const routes = (
     </Route>
 
     {/* SCAFFOLDER: Create new projects/components from software templates */}
-    <Route path="/create" element={<ScaffolderPage />} />
+    <Route path="/create" element={<ScaffolderPage />}>
+      <ScaffolderFieldExtensions>
+        <KagentSuggestFieldExtension />
+      </ScaffolderFieldExtensions>
+    </Route>
 
     {/* API DOCS: Browse and explore registered API definitions */}
     <Route path="/api-docs" element={<ApiExplorerPage />} />
