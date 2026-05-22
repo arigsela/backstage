@@ -12,6 +12,7 @@ metadata:
   annotations:
     terasky.backstage.io/add-to-catalog: "true"
     terasky.backstage.io/component-type: kagent-agent
+    terasky.backstage.io/links: '[{"url":"https://kagent.arigsela.com/agents/kagent/${{ values.name }}/chat","title":"Chat with this agent","icon":"chat"}]'
     backstage.io/managed-by-location: url:https://github.com/arigsela/kubernetes/blob/main/base-apps/kagent/agents/${{ values.name }}.yaml
     backstage.io/owner: ${{ values.owner }}
     # === agents.platform.ai/* v1 contract ===
