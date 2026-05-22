@@ -72,6 +72,8 @@ spec:
 {%- for tag in skill.tags %}
         - ${{ tag }}
 {%- endfor %}
+{%- else %}
+        tags: []
 {%- endif %}
 {%- endfor %}
 {%- endif %}
