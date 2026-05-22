@@ -32,6 +32,10 @@ function isHttpError(err: unknown): err is { status: number; message?: string } 
   );
 }
 
+// Returns true for both files and folders — getContent 200s on either
+// (file = object response, folder = array response) and 404s when absent.
+// The collision check needs both shapes since IDP-managed MCP servers
+// live in a folder while legacy ones may exist as a single .yaml file.
 async function pathExists(octokit: Octokit, path: string): Promise<boolean> {
   try {
     await octokit.repos.getContent({ owner: OWNER, repo: REPO, path });
