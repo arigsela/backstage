@@ -1,0 +1,23 @@
+{
+  "name": "custom-env-test",
+  "description": "Stdio MCP server with literal env vars (no secrets).",
+  "owner": "user:default/arisela",
+  "preset": "custom",
+  "githubToolsets": [],
+  "image": "python:3.12-slim",
+  "cmd": "python",
+  "args": ["-m", "my_mcp_server"],
+  "transportType": "stdio",
+  "port": null,
+  "extraEnv": [
+    { "name": "LOG_LEVEL", "value": "info" },
+    { "name": "API_BASE_URL", "value": "https://api.example.com" }
+  ],
+  "vaultSecrets": [],
+  "vaultPath": "",
+  "vaultTokenKey": "",
+  "cpuRequest": "100m",
+  "cpuLimit": "500m",
+  "memoryRequest": "128Mi",
+  "memoryLimit": "512Mi"
+}
