@@ -344,6 +344,11 @@ catalog:
 # mutations). Consumed by the homelab-knowledge kagent agent for ownership/
 # dependency/system questions. Auth: static token (backend.auth.externalAccess).
 mcpActions:
+  # Do NOT prefix tool names with the plugin id. Default names like
+  # "catalog.get-catalog-entity" contain a dot, which violates Anthropic's tool
+  # name pattern ^[a-zA-Z0-9_-]{1,128}$ and 400s the agent. Undotted names
+  # (e.g. "get-catalog-entity") are valid. Safe here — only catalog is exposed.
+  namespacedToolNames: false
   servers:
     catalog:
       name: catalog
