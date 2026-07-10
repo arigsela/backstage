@@ -338,8 +338,10 @@ catalog:
 mcpActions:
   servers:
     catalog:
-      include:
-        - id: 'catalog:entity'
+      name: catalog
+      filter:
+        include:
+          - id: 'catalog:entity'
 
 # --- KUBERNETES ---
 # The Kubernetes plugin shows pod/deployment status directly on entity pages.
