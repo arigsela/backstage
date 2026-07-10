@@ -340,8 +340,12 @@ mcpActions:
     catalog:
       name: catalog
       filter:
+        # Read-only catalog actions (Backstage 1.52 ids). get-catalog-entity
+        # returns an entity + its resolved relations; query-catalog-entities
+        # lists/filters entities. NOT register/unregister/validate (mutations).
         include:
-          - id: 'catalog:entity'
+          - id: 'catalog:get-catalog-entity'
+          - id: 'catalog:query-catalog-entities'
 
 # --- KUBERNETES ---
 # The Kubernetes plugin shows pod/deployment status directly on entity pages.
