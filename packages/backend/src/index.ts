@@ -203,6 +203,11 @@ backend.add(
 );
 backend.add(import('@backstage/plugin-catalog-backend-module-logs'));
 
+// MCP Actions backend — exposes registered actions as MCP tools. Configured
+// (app-config mcpActions) to serve a read-only /api/mcp-actions/v1/catalog for
+// the homelab-knowledge kagent agent. See app-config catalog server config.
+backend.add(import('@backstage/plugin-mcp-actions-backend'));
+
 /**
  * GITHUB CATALOG DISCOVERY (Phase 4)
  * Automatically discovers and imports entities from GitHub repositories.
