@@ -299,6 +299,20 @@ catalog:
           frequency: { minutes: 30 }       # How often to scan for new/updated repos
           timeout: { minutes: 3 }          # Max time for a single scan run
 
+      # Agent-docs framework: the framework places a catalog-info.yaml in each
+      # base-apps/<app>/ directory of the kubernetes repo. The 'arigsela' provider
+      # above only scans repo-root /catalog-info.yaml, so those per-app files were
+      # invisible. This dedicated provider discovers them. Scoped to the one repo
+      # that has base-apps/ so it never scans that path in other repos.
+      arigsela-kubernetes:
+        organization: 'arigsela'
+        catalogPath: '/base-apps/*/catalog-info.yaml'
+        filters:
+          repository: '^kubernetes$'
+        schedule:
+          frequency: { minutes: 30 }
+          timeout: { minutes: 3 }
+
 # --- KUBERNETES ---
 # The Kubernetes plugin shows pod/deployment status directly on entity pages.
 # Entities with the `backstage.io/kubernetes-id` annotation get a "Kubernetes" tab
