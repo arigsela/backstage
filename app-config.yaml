@@ -33,6 +33,14 @@ organization:
 # --- BACKEND ---
 # Configuration for the Backstage backend server.
 backend:
+  # ACTIONS SERVICE (alpha): the default actions service only loads actions from
+  # the plugins listed here. Without 'catalog', the catalog's registered actions
+  # (get-catalog-entity, query-catalog-entities) are dropped and the MCP catalog
+  # server exposes 0 tools. Required for the homelab-knowledge agent's MCP tool.
+  actions:
+    pluginSources:
+      - catalog
+
   # SERVICE-TO-SERVICE AUTH:
   # Backstage v1.x's new backend system requires backend plugins to authenticate
   # to each other when making internal API calls. With permission.enabled=true
