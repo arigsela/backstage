@@ -49,6 +49,14 @@ backend:
   # plus a Vault-backed BACKEND_SECRET in the K8s ExternalSecret + deployment env.
   auth:
     dangerouslyDisableDefaultAuthPolicy: true
+    # Static-token external access for the MCP endpoint. The homelab-knowledge
+    # kagent agent calls /api/mcp-actions/v1/catalog with Authorization: Bearer
+    # ${MCP_TOKEN}. Token comes from Vault via the backstage-secrets ExternalSecret.
+    externalAccess:
+      - type: static
+        options:
+          token: ${MCP_TOKEN}
+          subject: kagent-catalog-reader
 
   baseUrl: http://localhost:7007 # URL where the backend API is accessible
   listen:
@@ -220,6 +228,14 @@ catalog:
     - type: file
       target: ../../catalog-info.yaml
 
+    # Platform taxonomy (Group + Systems) from the kubernetes repo, giving the
+    # base-apps/* Resources/Components resolvable owner/system relations. Group
+    # is not in the global catalog.rules allow-list, so this location admits it.
+    - type: url
+      target: https://github.com/arigsela/kubernetes/blob/main/catalog/platform-entities.yaml
+      rules:
+        - allow: [Group, System]
+
     # Example entities: a System, Component, and API (see examples/entities.yaml)
     - type: file
       target: ../../examples/entities.yaml
@@ -312,6 +328,18 @@ catalog:
         schedule:
           frequency: { minutes: 30 }
           timeout: { minutes: 3 }
+
+# --- MCP ACTIONS ---
+# Expose Backstage actions as MCP tools. A single focused server 'catalog' at
+# /api/mcp-actions/v1/catalog exposes ONLY catalog:entity (get an entity with its
+# resolved relations) — NOT catalog:* (which includes register/unregister/validate
+# mutations). Consumed by the homelab-knowledge kagent agent for ownership/
+# dependency/system questions. Auth: static token (backend.auth.externalAccess).
+mcpActions:
+  servers:
+    catalog:
+      include:
+        - id: 'catalog:entity'
 
 # --- KUBERNETES ---
 # The Kubernetes plugin shows pod/deployment status directly on entity pages.
