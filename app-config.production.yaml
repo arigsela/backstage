@@ -94,6 +94,14 @@ catalog:
     - type: file
       target: ./catalog-info.yaml
 
+    # Platform taxonomy (Group + Systems + Domains + User) from the kubernetes
+    # repo. Production redefines catalog.locations and arrays REPLACE (not merge),
+    # so this MUST be restated here or the taxonomy never loads in production.
+    - type: url
+      target: https://github.com/arigsela/kubernetes/blob/main/catalog/platform-entities.yaml
+      rules:
+        - allow: [Group, System, Domain, User]
+
     # Example entities — demo data bundled in the image (see Dockerfile).
     # In the Docker container, examples/ is at /app/examples/.
     - type: file
