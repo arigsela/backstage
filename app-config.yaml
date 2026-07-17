@@ -246,9 +246,9 @@ catalog:
     - type: file
       target: ../../catalog-info.yaml
 
-    # Platform taxonomy (Group + Systems) from the kubernetes repo, giving the
-    # base-apps/* Resources/Components resolvable owner/system relations. Group
-    # is not in the global catalog.rules allow-list, so this location admits it.
+    # Platform taxonomy (Group + Systems + Domains + User) from the kubernetes repo,
+    # giving the base-apps/* Resources/Components resolvable owner/system relations.
+    # Group is not in the global catalog.rules allow-list, so this location admits it.
     - type: url
       target: https://github.com/arigsela/kubernetes/blob/main/catalog/platform-entities.yaml
       rules:
