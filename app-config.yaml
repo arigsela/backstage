@@ -242,7 +242,7 @@ catalog:
     - type: url
       target: https://github.com/arigsela/kubernetes/blob/main/catalog/platform-entities.yaml
       rules:
-        - allow: [Group, System]
+        - allow: [Group, System, Domain, User]
 
     # Example entities: a System, Component, and API (see examples/entities.yaml)
     - type: file
