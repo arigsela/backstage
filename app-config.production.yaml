@@ -102,6 +102,11 @@ catalog:
       rules:
         - allow: [Group, System, Domain, User]
 
+    - type: url
+      target: https://github.com/arigsela/kubernetes/blob/main/catalog/api-entities.yaml
+      rules:
+        - allow: [API]
+
     # Example entities — demo data bundled in the image (see Dockerfile).
     # In the Docker container, examples/ is at /app/examples/.
     - type: file

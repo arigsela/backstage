@@ -86,6 +86,16 @@ backend:
     methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
     credentials: true # Allow cookies/auth headers in cross-origin requests
 
+  # URL-reader allow-list for the $text-fetched API specs (catalog/api-entities.yaml).
+  # The reader rejects any host not listed here. Internal svc URLs => no auth/CORS.
+  # Only in this base config: production inherits it (backend object deep-merges;
+  # prod does not override backend.reading).
+  reading:
+    allow:
+      - host: chores-tracker-backend.chores-tracker.svc.cluster.local
+      - host: weather-kitchen-backend.weather-kitchen.svc.cluster.local
+      - host: dex.dex.svc.cluster.local:5556
+
   # DATABASE:
   # Backstage uses Knex.js under the hood for database access. Each backend
   # plugin gets its own database schema, created automatically on first startup.
@@ -243,6 +253,14 @@ catalog:
       target: https://github.com/arigsela/kubernetes/blob/main/catalog/platform-entities.yaml
       rules:
         - allow: [Group, System, Domain, User]
+
+    # Platform API entities (kind: API) from the kubernetes repo. Not under
+    # base-apps/, so discovered via this dedicated url location rather than the
+    # base-apps discovery provider.
+    - type: url
+      target: https://github.com/arigsela/kubernetes/blob/main/catalog/api-entities.yaml
+      rules:
+        - allow: [API]
 
     # Example entities: a System, Component, and API (see examples/entities.yaml)
     - type: file
