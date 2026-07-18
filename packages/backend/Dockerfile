@@ -55,6 +55,32 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get install -y --no-install-recommends libsqlite3-dev && \
     rm -rf /var/lib/apt/lists/*
 
+# TECHDOCS (local generator):
+# With `techdocs.generator.runIn: 'local'` in app-config, Backstage builds each
+# entity's docs in-process by shelling out to `mkdocs` — no Docker-in-Docker.
+# That needs mkdocs + the TechDocs plugin bundle on PATH. python3 is already
+# present (installed above for node-gyp); this adds pip + mkdocs-techdocs-core,
+# putting `mkdocs` on /usr/local/bin (on PATH for the `node` user). Installed as
+# root before the USER switch below.
+#
+# WHY get-pip + --no-compile (not `apt-get install python3-pip`):
+# This image is built for linux/amd64 under QEMU emulation on an arm64 host.
+# Debian's python3-pip apt postinst byte-compiles the Python stdlib/site-packages
+# via py3compile, which SEGFAULTS under that emulation (dpkg exit 139). Avoid it
+# by bootstrapping pip with get-pip.py and installing WITHOUT byte-compilation
+# (--no-compile); the real amd64 runtime compiles .pyc lazily on first import.
+# --break-system-packages: Debian trixie marks the system env externally-managed
+# (PEP 668); fine for this single-purpose image.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/* && \
+    curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py && \
+    python3 /tmp/get-pip.py --break-system-packages --no-compile && \
+    rm /tmp/get-pip.py && \
+    pip3 install --break-system-packages --no-cache-dir --no-compile mkdocs-techdocs-core
+
 # SECURITY: Run as non-root user.
 # The `node` user (uid 1000) comes pre-created in the Node.js base image.
 # All subsequent operations run as this unprivileged user.

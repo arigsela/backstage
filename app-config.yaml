@@ -160,7 +160,7 @@ proxy:
 techdocs:
   builder: 'local'
   generator:
-    runIn: 'docker' # 'docker' runs mkdocs inside a container, 'local' needs mkdocs installed
+    runIn: 'local' # in-process mkdocs (installed in the image); avoids Docker-in-Docker in the pod
   publisher:
     type: 'local'
 
