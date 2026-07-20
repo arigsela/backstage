@@ -1,0 +1,20 @@
+{
+  "name": "context7",
+  "description": "Documentation lookup MCP server via npx.",
+  "owner": "user:default/arisela",
+  "preset": "custom",
+  "githubToolsets": [],
+  "image": "",
+  "cmd": "npx",
+  "args": ["-y", "@upstash/context7-mcp@latest"],
+  "transportType": "stdio",
+  "port": null,
+  "extraEnv": [],
+  "vaultSecrets": [],
+  "vaultPath": "",
+  "vaultTokenKey": "",
+  "cpuRequest": "100m",
+  "cpuLimit": "500m",
+  "memoryRequest": "128Mi",
+  "memoryLimit": "512Mi"
+}
