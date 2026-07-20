@@ -29,7 +29,10 @@ import {
   AnyApiFactory, // Type for any API factory (used for the array type)
   configApiRef, // ApiRef for the Config API (reads app-config.yaml values)
   createApiFactory, // Helper to create API factories with typed dependencies
+  identityApiRef, // ApiRef for the Identity API (current user identity)
+  errorApiRef, // ApiRef for the Error API (error reporting/toasts)
 } from '@backstage/core-plugin-api';
+import { visitsApiRef, VisitsWebStorageApi } from '@backstage/plugin-home';
 
 export const apis: AnyApiFactory[] = [
   /**
@@ -59,4 +62,17 @@ export const apis: AnyApiFactory[] = [
    * configured auth provider (GitHub, GitLab, etc.) based on the target URL.
    */
   ScmAuth.createDefaultApiFactory(),
+
+  /**
+   * VISITS API (home plugin):
+   * Backs the "Recently visited" home-page card. VisitsWebStorageApi stores the
+   * visit history in the browser (per-user via identityApi) — no server persistence,
+   * which is fine for a single-user homelab.
+   */
+  createApiFactory({
+    api: visitsApiRef,
+    deps: { identityApi: identityApiRef, errorApi: errorApiRef },
+    factory: ({ identityApi, errorApi }) =>
+      VisitsWebStorageApi.create({ identityApi, errorApi }),
+  }),
 ];
