@@ -14,7 +14,7 @@
  */
 
 // --- React Router for client-side navigation ---
-import { Navigate, Route } from 'react-router-dom';
+import { Route } from 'react-router-dom';
 
 // --- Plugin Imports ---
 // Each plugin exports: page components, plugin objects (for route binding), and sometimes hooks.
@@ -65,6 +65,8 @@ import { apis } from './apis'; // Custom API factories (see apis.ts)
 import { entityPage } from './components/catalog/EntityPage'; // Tabs shown on entity detail pages
 import { searchPage } from './components/search/SearchPage'; // Custom search result layout
 import { Root } from './components/Root'; // App shell: sidebar navigation + header
+import { VisitListener } from '@backstage/plugin-home';
+import { HomePage } from './components/home/HomePage';
 
 // Core Backstage components
 import {
@@ -171,7 +173,7 @@ const app = createApp({
  * Each `<Route>` maps a URL path to a plugin page component.
  *
  * Route structure:
- * /                 -> Redirects to /catalog (the default landing page)
+ * /                 -> HomePage (the launchpad: search, tools, starred, recently visited)
  * /catalog          -> CatalogIndexPage (browse all entities)
  * /catalog/:ns/:kind/:name -> CatalogEntityPage (entity detail with tabs)
  * /docs             -> TechDocsIndexPage (browse all docs)
@@ -186,8 +188,8 @@ const app = createApp({
  */
 const routes = (
   <FlatRoutes>
-    {/* Default route: redirect to the catalog as the home page */}
-    <Route path="/" element={<Navigate to="catalog" />} />
+    {/* Home: composed launchpad (search, tools, starred, recently visited) */}
+    <Route path="/" element={<HomePage />} />
 
     {/* CATALOG: Main listing of all entities (components, APIs, systems, etc.) */}
     <Route path="/catalog" element={<CatalogIndexPage />} />
@@ -279,6 +281,7 @@ export default app.createRoot(
     <OAuthRequestDialog />
     <SignalsDisplay />
     <AppRouter>
+      <VisitListener />
       <Root>{routes}</Root>
     </AppRouter>
   </>,
