@@ -47,7 +47,13 @@ const tools = [
   { url: 'https://vault.arigsela.com', label: 'Vault', icon: <LockIcon /> },
   { url: '/docs', label: 'Docs', icon: <MenuBookIcon /> },
   { url: '/api-docs', label: 'API Explorer', icon: <ExtensionIcon /> },
-  { url: '/catalog-graph', label: 'Catalog Graph', icon: <AccountTreeIcon /> },
+  {
+    // Seed the standalone graph with root entities — the page reads them as a
+    // qs bracketed array (rootEntityRefs[]=...); without a root it renders empty.
+    url: '/catalog-graph?rootEntityRefs[]=domain:default/platform&rootEntityRefs[]=domain:default/products',
+    label: 'Catalog Graph',
+    icon: <AccountTreeIcon />,
+  },
 ];
 
 export const HomePage = () => {
