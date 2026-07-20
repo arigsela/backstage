@@ -262,6 +262,12 @@ catalog:
       rules:
         - allow: [API]
 
+    # New Application golden-path scaffolder template (arigsela/kubernetes).
+    - type: url
+      target: https://github.com/arigsela/kubernetes/blob/main/templates/new-app/template.yaml
+      rules:
+        - allow: [Template]
+
     # Example entities: a System, Component, and API (see examples/entities.yaml)
     - type: file
       target: ../../examples/entities.yaml
