@@ -13,6 +13,7 @@
  * - vault:setup — Creates Vault policy, K8s auth role, and placeholder secrets
  * - crossplane:teardown:open-decommission-pr — Opens a teardown PR for a v1.x IDP app
  * - kagent:agent:validate-name — Fails the wizard on kagent agent name collisions
+ * - newapp:validate-name — Fails the wizard on base-apps/<name> collisions
  * - kagent:agent:open-decommission-pr — Opens a teardown PR for an IDP-managed kagent Agent
  * - kagent:agent:invoke — Synchronously calls a kagent.dev Agent via the A2A protocol
  */
@@ -27,6 +28,7 @@ import { createDecommissionPullRequestAction } from './decommissionPullRequestAc
 import { createKagentValidateNameAction } from './kagentValidateNameAction';
 import { createKagentDecommissionAction } from './kagentDecommissionAction';
 import { createKagentInvokeAction } from './kagentInvokeAction';
+import { createNewAppValidateNameAction } from './newAppValidateNameAction';
 
 
 const scaffolderCustomActionsModule = createBackendModule({
@@ -47,6 +49,7 @@ const scaffolderCustomActionsModule = createBackendModule({
           createVaultSetupAction(),
           createDecommissionPullRequestAction(),
           createKagentValidateNameAction(),
+          createNewAppValidateNameAction(),
           createKagentDecommissionAction(),
           createKagentInvokeAction({ discovery }),
         );
