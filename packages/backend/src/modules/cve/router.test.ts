@@ -95,6 +95,27 @@ describe('POST /report', () => {
     });
   });
 
+  it('marks a scanned-but-clean week as covered, not as a gap', async () => {
+    // `covered` must be derived from scan coverage (scannedRepos), never
+    // from the finding count. A wrong implementation like
+    // `covered: actionable > 0` would pass every other test in this file
+    // (every covered:true fixture above happens to have nonzero actionable,
+    // and the only covered:false fixture happens to have zero actionable) —
+    // this case decouples the two so that confounded mistake gets caught.
+    const store = stubStore({
+      getHistory: jest.fn().mockResolvedValue([
+        historyPointFromRaw('2026-08-10', report('team/app:v3', [])),
+        historyPointFromRaw('2026-08-17', report('team/app:v2', ['CVE-1', 'CVE-2'])),
+      ]),
+    });
+    const res = await request(await appWith(store))
+      .post('/report')
+      .send({ images: ['team/app:v2'] });
+    expect(res.body.trend[0]).toEqual({
+      date: '2026-08-10', actionable: 0, covered: true,
+    });
+  });
+
   it('rejects a missing or malformed images array', async () => {
     const app = await appWith(stubStore());
     for (const body of [{}, { images: 'nope' }, { images: [1, 2] }]) {
@@ -122,5 +143,16 @@ describe('GET /health', () => {
   it('reports which report keys exist', async () => {
     const res = await request(await appWith(stubStore())).get('/health');
     expect(res.body).toMatchObject({ ok: true, keysFound: 3 });
+  });
+
+  it('reports a bucket failure as an error, never a thrown 5xx', async () => {
+    const store = stubStore({
+      health: jest.fn().mockRejectedValue(new Error('NoSuchBucket')),
+    });
+    const res = await request(await appWith(store)).get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(false);
+    expect(res.body.code).toBe('BUCKET_UNREACHABLE');
+    expect(res.body.message).toBe('NoSuchBucket');
   });
 });

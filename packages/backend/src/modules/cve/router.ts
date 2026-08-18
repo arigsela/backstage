@@ -71,10 +71,12 @@ export async function createRouter(opts: {
     try {
       res.status(200).json({ ok: true, ...(await store.health()) });
     } catch (e: any) {
+      const message = e instanceof Error ? e.message : String(e);
+      logger.error(`cve — BUCKET_UNREACHABLE: ${message}`);
       res.status(200).json({
         ok: false,
         code: 'BUCKET_UNREACHABLE',
-        message: e instanceof Error ? e.message : String(e),
+        message,
       });
     }
   });
