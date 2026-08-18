@@ -68,6 +68,28 @@ describe('CveFindingsTable', () => {
     );
   });
 
+  it('flags images the scan missed even when other images produced findings', () => {
+    // Regression guard for a mixed-coverage report: some images matched and
+    // produced findings, but at least one did not. Silently dropping this
+    // caption would make a partial scan look complete — the same failure
+    // family `not-scanned` vs `clean` exists to prevent, just inside the
+    // `data` state instead of at the top level.
+    mockUseCveReport.mockReturnValue({
+      kind: 'data',
+      scannedAt: '2026-08-17',
+      matchedRefs: ['team/app:v1'],
+      unmatchedRefs: ['team/other:v2'],
+      totals: { critical: 1, high: 0, actionable: 1 },
+      findings: [finding],
+      trend: [],
+      delta: undefined,
+    });
+    render(<CveFindingsTable />);
+    expect(screen.getByText('CVE-2026-1234')).toBeInTheDocument();
+    expect(screen.getByText(/not covered by the scan/i)).toBeInTheDocument();
+    expect(screen.getByText(/team\/other:v2/)).toBeInTheDocument();
+  });
+
   it('shows a reassuring empty state only when genuinely clean', () => {
     mockUseCveReport.mockReturnValue({
       kind: 'clean',
@@ -99,5 +121,8 @@ describe('CveFindingsTable', () => {
     });
     render(<CveFindingsTable />);
     expect(screen.getByText(/AccessDenied/)).toBeInTheDocument();
+    // An error must never render as a zero — same property CveSummaryCard
+    // asserts for the identical state, kept in lockstep here.
+    expect(screen.queryByText('0')).toBeNull();
   });
 });
