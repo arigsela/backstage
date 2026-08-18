@@ -116,6 +116,22 @@ backend.add(import('./modules/scaffolder'));
 backend.add(import('./modules/kagent-suggest'));
 
 /**
+ * CVE BACKEND PLUGIN
+ *
+ * HTTP routes POST /api/cve/report and GET /api/cve/health. Serves the
+ * weekly Trivy container-image scan results (produced by the image-scan
+ * Argo Workflow and written to S3) to the entity-page CVE card and
+ * Security tab.
+ *
+ * Requires the `cve:` config block and read-only S3 credentials in the
+ * default AWS credential chain. GET /api/cve/health reports whether the
+ * bucket and the expected report keys are reachable.
+ *
+ * See: packages/backend/src/modules/cve/ for implementation.
+ */
+backend.add(import('./modules/cve'));
+
+/**
  * TERASKY SCAFFOLDER UTILITIES
  * Provides additional scaffolder actions from TeraSky for working with
  * Crossplane resources and Kubernetes manifests in scaffolder templates.
