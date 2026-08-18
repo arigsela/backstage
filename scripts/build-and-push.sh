@@ -148,9 +148,19 @@ aws ecr get-login-password --region "${AWS_REGION}" | \
 # --provenance=false suppresses the "unknown/unknown" attestation manifest
 # that BuildKit otherwise adds to the index — keeps the manifest list clean
 # with only the platforms we actually built.
+#
+# --pull: always re-fetch the base image (node:24-trixie-slim) from the
+# registry instead of reusing whatever copy is sitting in the local buildx
+# cache. Without this, a cached base can silently ship months-stale Debian
+# packages even though `apt-get upgrade` runs in the Dockerfile below — the
+# upgrade only patches whatever base layer buildx actually pulled in. This
+# alone doesn't fix much (most CVEs in this image are Node.js production
+# transitives, not stale OS packages), but it's a prerequisite for the
+# Dockerfile's `apt-get upgrade` step to have anything current to upgrade to.
 echo ""
 echo ">>> Step 5/6: Building & pushing Docker image (${PLATFORM})..."
 docker buildx build \
+  --pull \
   --platform="${PLATFORM}" \
   --provenance=false \
   -f packages/backend/Dockerfile \
