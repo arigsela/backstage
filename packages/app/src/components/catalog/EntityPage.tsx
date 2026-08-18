@@ -36,7 +36,11 @@ import {
   EntityOwnershipCard,
 } from '@backstage/plugin-org';
 import { EntityTechdocsContent } from '@backstage/plugin-techdocs';
-import { EmptyState, InfoCard, MarkdownContent } from '@backstage/core-components';
+import {
+  EmptyState,
+  InfoCard,
+  MarkdownContent,
+} from '@backstage/core-components';
 import {
   Direction,
   EntityCatalogGraphCard,
@@ -70,6 +74,10 @@ import {
   IfCrossplaneResourcesListAvailable,
   isCrossplaneAvailable,
 } from '@terasky/backstage-plugin-crossplane-resources-frontend';
+
+// Container CVE surfacing: Overview card + Security tab content. Both call
+// useCveReport() internally and take no props — see packages/app/src/components/cve.
+import { CveFindingsTable, CveSummaryCard } from '../cve';
 
 const techdocsContent = (
   <EntityTechdocsContent>
@@ -109,7 +117,9 @@ interface KagentAgentSpec {
     systemMessage?: string;
     a2aConfig?: { skills?: KagentSkill[] };
     tools?: Array<{ type: string; agent?: { name: string } }>;
-    context?: { compaction?: { compactionInterval?: number; overlapSize?: number } };
+    context?: {
+      compaction?: { compactionInterval?: number; overlapSize?: number };
+    };
     deployment?: {
       resources?: {
         requests?: { cpu?: string; memory?: string };
@@ -147,18 +157,30 @@ const buildKagentMarkdown = (
 
   const lines: string[] = [`# ${entityName}`, ''];
   if (spec.description) lines.push(spec.description, '');
-  lines.push('## Purpose', '', decl.systemMessage || '(no system message defined)');
+  lines.push(
+    '## Purpose',
+    '',
+    decl.systemMessage || '(no system message defined)',
+  );
 
   if (skills.length > 0) {
     lines.push('', '## Skills');
     for (const skill of skills) {
-      lines.push('', `### ${skill.name} (\`${skill.id}\`)`, '', skill.description);
+      lines.push(
+        '',
+        `### ${skill.name} (\`${skill.id}\`)`,
+        '',
+        skill.description,
+      );
       if (skill.examples?.length) {
         lines.push('', '**Examples:**');
         for (const ex of skill.examples) lines.push(`- ${ex}`);
       }
       if (skill.tags?.length) {
-        lines.push('', `**Tags:** ${skill.tags.map(t => `\`${t}\``).join(', ')}`);
+        lines.push(
+          '',
+          `**Tags:** ${skill.tags.map(t => `\`${t}\``).join(', ')}`,
+        );
       }
     }
   }
@@ -171,7 +193,9 @@ const buildKagentMarkdown = (
       'This agent can delegate tasks to the following agents:',
     );
     for (const d of delegates) {
-      lines.push(`- **${d}** — ${DELEGATE_DESCRIPTIONS[d] || '(see kagent docs)'}`);
+      lines.push(
+        `- **${d}** — ${DELEGATE_DESCRIPTIONS[d] || '(see kagent docs)'}`,
+      );
     }
   }
 
@@ -187,12 +211,18 @@ const buildKagentMarkdown = (
   }
   if (resources) {
     lines.push(
-      `| CPU | ${resources.requests?.cpu || '?'} / ${resources.limits?.cpu || '?'} (req/lim) |`,
-      `| Memory | ${resources.requests?.memory || '?'} / ${resources.limits?.memory || '?'} (req/lim) |`,
+      `| CPU | ${resources.requests?.cpu || '?'} / ${
+        resources.limits?.cpu || '?'
+      } (req/lim) |`,
+      `| Memory | ${resources.requests?.memory || '?'} / ${
+        resources.limits?.memory || '?'
+      } (req/lim) |`,
     );
   }
   lines.push(
-    `| Built-in prompts | ${decl.promptTemplate ? 'included' : 'not included'} |`,
+    `| Built-in prompts | ${
+      decl.promptTemplate ? 'included' : 'not included'
+    } |`,
   );
 
   lines.push(
@@ -220,12 +250,15 @@ const KagentAboutCardContent = () => {
     // namespace, so we use those values and hardcode the kagent API path.
     const ann = entity.metadata.annotations || {};
     const name =
-      ann['terasky.backstage.io/kubernetes-resource-name'] || entity.metadata.name;
+      ann['terasky.backstage.io/kubernetes-resource-name'] ||
+      entity.metadata.name;
     const namespace =
       ann['terasky.backstage.io/kubernetes-resource-namespace'] || 'kagent';
 
     if (!name || !namespace) {
-      setError('Unable to determine the Agent CRD name/namespace from the entity');
+      setError(
+        'Unable to determine the Agent CRD name/namespace from the entity',
+      );
       setLoading(false);
       return;
     }
@@ -277,7 +310,9 @@ const KagentAboutCardContent = () => {
   return (
     <Grid item xs={12}>
       <InfoCard title="About this agent">
-        <MarkdownContent content={buildKagentMarkdown(entity.metadata.name, spec)} />
+        <MarkdownContent
+          content={buildKagentMarkdown(entity.metadata.name, spec)}
+        />
       </InfoCard>
     </Grid>
   );
@@ -287,6 +322,20 @@ const kagentAboutCard = (
   <EntitySwitch>
     <EntitySwitch.Case if={isKagentAgent}>
       <KagentAboutCardContent />
+    </EntitySwitch.Case>
+  </EntitySwitch>
+);
+
+// The CVE card is meaningful only where the Kubernetes plugin can resolve the
+// entity's running images — that resolution IS the CVE-to-entity join. Where
+// Kubernetes is unavailable the card is not rendered at all, rather than
+// rendering an empty card that would read as "no vulnerabilities".
+const cveSummaryCard = (
+  <EntitySwitch>
+    <EntitySwitch.Case if={isKubernetesAvailable}>
+      <Grid item md={6} xs={12}>
+        <CveSummaryCard />
+      </Grid>
     </EntitySwitch.Case>
   </EntitySwitch>
 );
@@ -361,6 +410,8 @@ const overviewContent = (
 
     {kagentAboutCard}
 
+    {cveSummaryCard}
+
     <Grid item md={4} xs={12}>
       <EntityLinksCard />
     </Grid>
@@ -370,11 +421,30 @@ const overviewContent = (
   </Grid>
 );
 
-// kagent IDP v1.8: dedicated 3-tab layout (Overview / Kubernetes / Docs)
-// for entities with spec.type='kagent-agent'. The Kubernetes tab shows
+// Security tab: actionable container CVEs for the images this entity runs.
+// Defined once and shared across all four layouts below rather than
+// copy-pasted, since the route is identical everywhere it appears. Guarded
+// by isKubernetesAvailable for the same reason as cveSummaryCard above — the
+// Kubernetes plugin's image resolution is what joins CVE findings to this
+// entity in the first place.
+const securityRoute = (
+  <EntityLayout.Route
+    path="/security"
+    title="Security"
+    if={isKubernetesAvailable}
+  >
+    <CveFindingsTable />
+  </EntityLayout.Route>
+);
+
+// kagent IDP v1.8: dedicated 4-tab layout (Overview / Kubernetes / Security /
+// Docs) for entities with spec.type='kagent-agent'. The Kubernetes tab shows
 // the kagent-controller-spawned workload (Pod/Deployment/Service) plus
 // the Agent CRD itself in the Custom Resources panel (configured via
-// kubernetes.customResources in app-config).
+// kubernetes.customResources in app-config). The Security tab was added for
+// container CVE surfacing: two of the six images in the estate with
+// actionable findings are kagent agents, so this layout needs it as much as
+// serviceEntityPage and websiteEntityPage do.
 const kagentAgentPage = (
   <EntityLayout>
     <EntityLayout.Route path="/" title="Overview">
@@ -388,6 +458,8 @@ const kagentAgentPage = (
     >
       <EntityKubernetesContent />
     </EntityLayout.Route>
+
+    {securityRoute}
 
     <EntityLayout.Route path="/docs" title="Docs">
       {techdocsContent}
@@ -412,6 +484,8 @@ const serviceEntityPage = (
     >
       <EntityKubernetesContent />
     </EntityLayout.Route>
+
+    {securityRoute}
 
     <EntityLayout.Route
       path="/crossplane"
@@ -478,6 +552,8 @@ const websiteEntityPage = (
       <EntityKubernetesContent />
     </EntityLayout.Route>
 
+    {securityRoute}
+
     <EntityLayout.Route path="/dependencies" title="Dependencies">
       <Grid container spacing={3} alignItems="stretch">
         <Grid item md={6}>
@@ -507,6 +583,18 @@ const defaultEntityPage = (
     <EntityLayout.Route path="/" title="Overview">
       {overviewContent}
     </EntityLayout.Route>
+
+    {/*
+      Unlike the three layouts above, this one has no dedicated Kubernetes
+      route — most entities that fall through to it aren't backed by a
+      workload. securityRoute is included anyway, positioned where the
+      Kubernetes route would sit in the other layouts (just ahead of Docs),
+      because its own if={isKubernetesAvailable} guard already makes it
+      inert for entities without Kubernetes. Omitting it here would silently
+      blind any entity that reaches this layout but does happen to run a
+      scanned image.
+    */}
+    {securityRoute}
 
     <EntityLayout.Route path="/docs" title="Docs">
       {techdocsContent}
