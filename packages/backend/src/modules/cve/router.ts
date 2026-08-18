@@ -43,16 +43,34 @@ export async function createRouter(opts: {
       const history = await store.getHistory();
 
       // Trend is scoped to the repos this component actually matched.
-      const repos = summary.matchedRefs.map(normalizeImageRef);
+      // Deduplicated: two running tags of one repo (a mid-rollout deploy)
+      // both normalize to the same repo path, and without Set-ing this a
+      // repo running two tags would be counted twice in every trend point
+      // while the headline total (deduped in aggregate.ts) counts it once —
+      // producing a phantom regression between the headline and the newest
+      // sparkline point.
+      const repos = Array.from(
+        new Set(summary.matchedRefs.map(normalizeImageRef)),
+      );
       const trend = history.map(point => ({
         date: point.date,
         actionable: repos.reduce(
           (n, repo) => n + (point.countsByRepo.get(repo) ?? 0),
           0,
         ),
-        // A week that never scanned these repos is a GAP, not a zero.
-        // Rendering it as zero would read as "everything was fixed that week".
-        covered: repos.some(repo => point.scannedRepos.has(repo)),
+        // A week that never scanned ALL of these repos is a GAP, not a real
+        // data point — `every`, not `some`. For a multi-image component,
+        // `some` would mark a week that only scanned a subset as covered
+        // while `actionable` still only sums that subset, drawing a fake
+        // improvement (and a real-looking "vs last scan" delta) off a report
+        // that was actually incomplete. The tradeoff: `every` means a
+        // component that later adds a new image loses trend continuity for
+        // weeks before that image existed (none of them scanned it, so none
+        // of them are "every"-covered once it's added to `repos`). That
+        // was chosen deliberately — a gap that says "we don't know" is
+        // always preferable here to a line that says "things got better"
+        // when they didn't.
+        covered: repos.every(repo => point.scannedRepos.has(repo)),
       }));
 
       res.status(200).json({ ok: true, scannedAt: date, ...summary, trend });

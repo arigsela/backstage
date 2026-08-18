@@ -75,6 +75,18 @@ export const CveSummaryCard = () => {
         <Typography variant="caption" className={classes.muted}>
           Scanned {state.scannedAt}
         </Typography>
+        {state.unmatchedRefs.length > 0 && (
+          // The reassuring copy above must never stand alone when part of
+          // this component's images were never scanned — an unscanned image
+          // could hide anything, so "clean" here only covers matchedRefs.
+          <Typography
+            variant="caption"
+            className={classes.refs}
+            component="div"
+          >
+            Not covered by the scan: {state.unmatchedRefs.join(', ')}
+          </Typography>
+        )}
       </InfoCard>
     );
   }

@@ -48,12 +48,42 @@ describe('CveSummaryCard', () => {
       kind: 'clean',
       scannedAt: '2026-08-17',
       matchedRefs: ['team/x:v1'],
+      unmatchedRefs: [],
     });
     render(<CveSummaryCard />);
     expect(
       screen.getByText(/no actionable vulnerabilities/i),
     ).toBeInTheDocument();
     expect(screen.queryByText(/not covered/i)).toBeNull();
+  });
+
+  it('caveats a clean result when part of the component was never scanned', () => {
+    // Finding A fix: "No actionable vulnerabilities" must not stand alone
+    // when one of the component's images was never scanned — that image
+    // could hide anything.
+    mockUseCveReport.mockReturnValue({
+      kind: 'clean',
+      scannedAt: '2026-08-17',
+      matchedRefs: ['team/x:v1'],
+      unmatchedRefs: ['team/y:v1'],
+    });
+    render(<CveSummaryCard />);
+    expect(
+      screen.getByText(/no actionable vulnerabilities/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/not covered by the scan/i)).toBeInTheDocument();
+    expect(screen.getByText(/team\/y:v1/)).toBeInTheDocument();
+  });
+
+  it('does not render a caveat when a clean result fully covered the component', () => {
+    mockUseCveReport.mockReturnValue({
+      kind: 'clean',
+      scannedAt: '2026-08-17',
+      matchedRefs: ['team/x:v1'],
+      unmatchedRefs: [],
+    });
+    render(<CveSummaryCard />);
+    expect(screen.queryByText(/not covered by the scan/i)).toBeNull();
   });
 
   it('renders counts and a delta', () => {

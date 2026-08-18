@@ -136,4 +136,24 @@ describe('ReportStore.getHistory', () => {
     const points = await new ReportStore(source, cfg).getHistory();
     expect(points.every(p => /^\d{4}-\d{2}-\d{2}$/.test(p.date))).toBe(true);
   });
+
+  it('ignores a key that merely ends in a date, like an unrelated backup object', async () => {
+    // Fix D regression: this bucket is a general Argo artifacts bucket
+    // written by another repo. `backup-2026-09-01.json` ends in
+    // \d{4}-\d{2}-\d{2}\.json but is not one of ours. An unanchored regex
+    // would extract "2026-09-01" as a date, and getHistory would then try to
+    // fetch `cve-reports/2026-09-01.json` — a key that does not exist —
+    // and throw, taking down the whole card (REPORT_UNAVAILABLE) for every
+    // component even though the real dated reports are all present and fine.
+    const { source } = fakeSource({
+      ...objects,
+      'cve-reports/backup-2026-09-01.json': report('x', []),
+    });
+    const points = await new ReportStore(source, cfg).getHistory();
+    expect(points.map(p => p.date)).toEqual([
+      '2026-08-03',
+      '2026-08-10',
+      '2026-08-17',
+    ]);
+  });
 });

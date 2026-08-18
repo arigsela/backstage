@@ -95,11 +95,30 @@ describe('CveFindingsTable', () => {
       kind: 'clean',
       scannedAt: '2026-08-17',
       matchedRefs: ['team/app:v1'],
+      unmatchedRefs: [],
     });
     render(<CveFindingsTable />);
     expect(
       screen.getByText(/no actionable vulnerabilities/i),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/not covered by the scan/i)).toBeNull();
+  });
+
+  it('caveats a clean result when part of the component was never scanned', () => {
+    // Finding A fix, table half: same property as CveSummaryCard — an
+    // unscanned image must never be silently absorbed into "clean".
+    mockUseCveReport.mockReturnValue({
+      kind: 'clean',
+      scannedAt: '2026-08-17',
+      matchedRefs: ['team/app:v1'],
+      unmatchedRefs: ['team/other:v2'],
+    });
+    render(<CveFindingsTable />);
+    expect(
+      screen.getByText(/no actionable vulnerabilities/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/not covered by the scan/i)).toBeInTheDocument();
+    expect(screen.getByText(/team\/other:v2/)).toBeInTheDocument();
   });
 
   it('shows a non-reassuring empty state when not scanned', () => {
