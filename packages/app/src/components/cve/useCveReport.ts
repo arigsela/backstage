@@ -129,6 +129,18 @@ export function useCveReport(): CveState {
   const { kubernetesObjects, loading, error } = useKubernetesObjects(entity);
   const [state, setState] = useState<CveState>({ kind: 'loading' });
 
+  // Depend on the *stringified derived image list*, not `kubernetesObjects`
+  // itself: useKubernetesObjects polls and hands back a new object identity
+  // every tick even when nothing running has changed. Depending on the object
+  // would re-fire this effect (and re-hit the cve backend) on every poll;
+  // depending on its derived, deduped image list only re-fires when the set
+  // of images actually changes. Computing it here (rather than inside the
+  // effect) means the effect body never references `kubernetesObjects`
+  // directly, so exhaustive-deps has nothing to flag and needs no disable.
+  const imagesKey = JSON.stringify(
+    imagesFromKubernetesObjects(kubernetesObjects),
+  );
+
   useEffect(() => {
     if (loading) {
       setState({ kind: 'loading' });
@@ -139,7 +151,7 @@ export function useCveReport(): CveState {
       return undefined;
     }
 
-    const images = imagesFromKubernetesObjects(kubernetesObjects);
+    const images: string[] = JSON.parse(imagesKey);
     if (images.length === 0) {
       // Explicitly NOT "no vulnerabilities" — we could not determine the images.
       setState({ kind: 'no-workloads' });
@@ -198,18 +210,7 @@ export function useCveReport(): CveState {
     return () => {
       cancelled = true;
     };
-    // Depend on the *stringified derived image list*, not `kubernetesObjects`
-    // itself: useKubernetesObjects polls and hands back a new object identity
-    // every tick even when nothing running has changed. Depending on the object
-    // would re-fire this effect (and re-hit the cve backend) on every poll;
-    // depending on its derived, deduped image list only re-fires when the set
-    // of images actually changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    loading,
-    error,
-    JSON.stringify(imagesFromKubernetesObjects(kubernetesObjects)),
-  ]);
+  }, [loading, error, imagesKey]);
 
   return state;
 }
