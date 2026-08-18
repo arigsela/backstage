@@ -39,9 +39,23 @@ export function normalizeImageRef(ref: string): string {
 }
 
 /**
- * The single definition of "actionable", shared with the Slack alert.
- * Changing it here without changing it there makes the two views disagree,
- * after which neither is believed.
+ * The definition of "actionable" used by this feature.
+ *
+ * The canonical definition lives in the Slack alerting scanner
+ * (arigsela/kubernetes, base-apps/argo-workflow-tasks/configmap-cve-report.yaml,
+ * `actionable()`) and has THREE clauses: the image is under our owned ECR
+ * prefix ("852893458518.dkr.ecr."), severity is CRITICAL or HIGH, and a fix
+ * exists.
+ *
+ * We deliberately use only the latter two and drop the ownership clause. That
+ * clause exists in the Slack alert to stop paging on images we cannot rebuild
+ * ourselves — but applying it here would render every component running an
+ * upstream (non-ECR) image as falsely "clean" on its catalog page, even while
+ * a real, fixable CRITICAL sits inside that image. Ownership is an alerting
+ * concern, not a "does this component have a problem" concern. See spec §5
+ * (amended in commit b27f4f8) for the full rationale. This divergence from
+ * the Slack alert is intentional — do not "fix" it to add the ownership
+ * filter.
  */
 export function isActionable(f: RawFinding): boolean {
   const severity = String(f.severity ?? '').toUpperCase();
@@ -83,10 +97,17 @@ function toActionable(f: RawFinding): ActionableFinding {
  * to this function, not to fetching or caching.
  */
 export function reduceReport(raw: RawReport): ReducedReport {
-  const scannedRepos = new Set((raw.scanned ?? []).map(normalizeImageRef));
+  // Defense in depth: a caller that reaches this function without going
+  // through assertRawReport first must not have a truncated report silently
+  // coalesce into "0 scanned, 0 findings" via `?? []` — that reads as a clean
+  // sweep, the most dangerous failure mode for this feature. This call is
+  // cheap (two Array.isArray checks) and idempotent when the caller already
+  // validated.
+  assertRawReport(raw);
+  const scannedRepos = new Set(raw.scanned.map(normalizeImageRef));
   const byRepo = new Map<string, ActionableFinding[]>();
 
-  for (const f of raw.findings ?? []) {
+  for (const f of raw.findings) {
     if (!isActionable(f)) continue;
     const repo = normalizeImageRef(f.image);
     const list = byRepo.get(repo);

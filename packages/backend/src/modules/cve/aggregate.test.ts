@@ -92,6 +92,26 @@ describe('isActionable', () => {
   it('is case-insensitive on severity', () => {
     expect(isActionable(finding({ severity: 'critical' }))).toBe(true);
   });
+
+  it('counts an unowned upstream image, unlike the Slack alert', () => {
+    // The Slack alert's canonical actionable() additionally requires the
+    // image to be under our owned ECR prefix ("852893458518.dkr.ecr.") so it
+    // doesn't page us about images we cannot rebuild ourselves. We
+    // deliberately do NOT apply that filter here: an upstream image like this
+    // one can still carry a real, fixable CRITICAL, and hiding it would
+    // render the component falsely "clean". Do not "fix" this test to match
+    // the Slack alert's three-clause rule — see the WHY-comment on
+    // isActionable and spec §5.
+    expect(
+      isActionable(
+        finding({
+          image: 'quay.io/jetstack/cert-manager-webhook:v1.20.2',
+          severity: 'CRITICAL',
+          fixed: '1.20.3',
+        }),
+      ),
+    ).toBe(true);
+  });
 });
 
 describe('reduceReport', () => {
@@ -134,6 +154,14 @@ describe('reduceReport', () => {
       'CVE-1',
       'CVE-9',
     ]);
+  });
+
+  it('throws on a malformed report rather than silently reducing to zero findings', () => {
+    // Simulates a caller reaching reduceReport without going through
+    // assertRawReport first. The type system would normally forbid passing an
+    // object missing `findings`, hence the `as any` — this is exercising the
+    // runtime guard that exists precisely for callers that bypass the type.
+    expect(() => reduceReport({ scanned: [] } as any)).toThrow(/findings/);
   });
 });
 
