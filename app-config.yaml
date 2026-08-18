@@ -400,6 +400,33 @@ kubernetes:
       apiVersion: 'v1alpha2'
       plural: 'agents'
 
+# --- CONTAINER CVE REPORTS ---
+# Points the `cve` backend plugin at the S3 bucket where the weekly Trivy
+# image scan (CronWorkflow/image-scan in the argo-workflows namespace) writes
+# its results. The plugin reads two kinds of key under `prefix`:
+#
+#   latest.json       the most recent run — mutable, so it carries a TTL
+#   YYYY-MM-DD.json   per-run history for the trend sparkline — immutable,
+#                     so these are cached for the process lifetime
+#
+# Credentials come from the default AWS credential chain (env vars on the
+# pod), the same way the aws:ecr:* scaffolder actions authenticate. The
+# plugin imports only GetObject and ListObjectsV2 — it has no write path.
+#
+# NOTE: this is an object, so Backstage's merge-objects-but-REPLACE-arrays
+# behavior does not bite here. If you ever add a list under this key, it must
+# be mirrored into app-config.production.yaml in full — see the
+# kubernetes.customResources block for the lesson.
+#
+# GET /api/cve/health reports whether the bucket and the expected keys are
+# reachable — check that first when the card shows an error.
+cve:
+  bucket: asela-argo-workflows-artifacts
+  region: us-east-1
+  prefix: cve-reports/
+  cacheTtlMinutes: 60   # latest.json changes weekly; an hour is generous
+  historyWeeks: 8       # sparkline window
+
 # --- PERMISSIONS ---
 # The permissions framework controls access to Backstage features.
 # When enabled, plugins can check "can this user do X?" before allowing actions.
