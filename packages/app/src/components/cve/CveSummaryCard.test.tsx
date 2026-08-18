@@ -3,7 +3,6 @@ import { CveSummaryCard } from './CveSummaryCard';
 
 const mockUseCveReport = jest.fn();
 jest.mock('./useCveReport', () => ({
-  ...jest.requireActual('./useCveReport'),
   useCveReport: () => mockUseCveReport(),
 }));
 jest.mock('@backstage/core-components', () => ({
@@ -66,6 +65,7 @@ describe('CveSummaryCard', () => {
       totals: { critical: 41, high: 155, actionable: 196 },
       findings: [],
       delta: -12,
+      trendReady: true,
       trend: [
         { date: '2026-08-10', actionable: 208, covered: true },
         { date: '2026-08-17', actionable: 196, covered: true },
@@ -87,10 +87,38 @@ describe('CveSummaryCard', () => {
       totals: { critical: 1, high: 0, actionable: 1 },
       findings: [],
       delta: undefined,
+      trendReady: false,
       trend: [{ date: '2026-08-17', actionable: 1, covered: true }],
     });
     render(<CveSummaryCard />);
     expect(screen.getByText(/after the next scan/i)).toBeInTheDocument();
+  });
+
+  it('shows the trend fallback, never a blank chart, when trendReady is false even though covered points exist', () => {
+    // Finding 2 regression test: before the fix, the card computed its own
+    // "hasTrend" by counting covered points anywhere (>= 2), which this trend
+    // would satisfy (two covered points) while none of them are adjacent —
+    // Sparkline can't draw a segment from that, so the old code rendered a
+    // blank <svg>. The card must defer entirely to the hook's trendReady flag.
+    mockUseCveReport.mockReturnValue({
+      kind: 'data',
+      scannedAt: '2026-08-17',
+      matchedRefs: ['team/app:v1'],
+      unmatchedRefs: [],
+      totals: { critical: 1, high: 0, actionable: 1 },
+      findings: [],
+      delta: undefined,
+      trendReady: false,
+      trend: [
+        { date: '2026-07-27', actionable: 3, covered: true },
+        { date: '2026-08-03', actionable: 0, covered: false },
+        { date: '2026-08-10', actionable: 2, covered: true },
+        { date: '2026-08-17', actionable: 1, covered: false },
+      ],
+    });
+    const { container } = render(<CveSummaryCard />);
+    expect(screen.getByText(/after the next scan/i)).toBeInTheDocument();
+    expect(container.querySelector('svg')).toBeNull();
   });
 
   it('renders an error as an error, not as zero', () => {

@@ -37,4 +37,22 @@ describe('Sparkline', () => {
     );
     expect(container.querySelectorAll('path')).toHaveLength(2);
   });
+
+  it('renders nothing when covered points exist but none are adjacent', () => {
+    // Enough covered points to pass a naive "covered.length >= 2" check, but
+    // each one is isolated by a gap on both sides, so no run is ever long
+    // enough to draw a segment. Must render nothing, not an empty <svg>.
+    const { container } = render(
+      <Sparkline
+        points={[
+          { value: 5, covered: true },
+          { value: 0, covered: false },
+          { value: 3, covered: true },
+          { value: 0, covered: false },
+          { value: 4, covered: true },
+        ]}
+      />,
+    );
+    expect(container.querySelector('svg')).toBeNull();
+  });
 });

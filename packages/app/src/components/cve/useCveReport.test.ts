@@ -182,11 +182,17 @@ describe('useCveReport', () => {
     const s = result.current as any;
     expect(s.totals.actionable).toBe(196);
     expect(s.delta).toBe(-12);
+    expect(s.trendReady).toBe(true);
   });
 
-  it('computes delta from the two covered points either side of a gap', async () => {
-    // A regression that drops the `.covered` filter in deltaFrom would happily
-    // diff against the uncovered midpoint instead of skipping over it.
+  it('leaves delta undefined when the scan immediately before the latest is a gap', async () => {
+    // Finding 4 fix (supersedes the 9e8873b hardening test this replaces):
+    // the previous semantics skipped past the uncovered midpoint and diffed
+    // the two covered points on either side of it (208 -> 196, delta -12),
+    // then labelled that "vs last scan" — a real number attached to a false
+    // claim, since the actual last scan (2026-08-10) never covered this repo.
+    // Delta must now be undefined whenever the final two trend entries are
+    // not BOTH covered, regardless of what an earlier scan saw.
     mockUseKubernetesObjects.mockReturnValue(k8sWithImages(['team/app:v1']));
     (global.fetch as jest.Mock).mockResolvedValue(
       okResponse({
@@ -215,7 +221,34 @@ describe('useCveReport', () => {
     );
     const { result } = renderHook(() => useCveReport());
     await waitFor(() => expect(result.current.kind).toBe('data'));
-    expect((result.current as any).delta).toBe(-12);
+    expect((result.current as any).delta).toBeUndefined();
+  });
+
+  it('marks trend not ready to chart when covered points are scattered, not adjacent', async () => {
+    // Two covered points exist here — enough to satisfy the old, wrong
+    // "covered.length >= 2" readiness check — but neither is adjacent to the
+    // other, so Sparkline cannot draw a single segment from this data.
+    // trendReady must track what can actually be drawn, not just a count.
+    mockUseKubernetesObjects.mockReturnValue(k8sWithImages(['team/app:v1']));
+    (global.fetch as jest.Mock).mockResolvedValue(
+      okResponse({
+        ok: true,
+        scannedAt: '2026-08-17',
+        matchedRefs: ['team/app:v1'],
+        unmatchedRefs: [],
+        totals: { critical: 1, high: 0, actionable: 1 },
+        findings: [],
+        trend: [
+          { date: '2026-07-27', actionable: 3, covered: true },
+          { date: '2026-08-03', actionable: 0, covered: false },
+          { date: '2026-08-10', actionable: 2, covered: true },
+          { date: '2026-08-17', actionable: 1, covered: false },
+        ],
+      }),
+    );
+    const { result } = renderHook(() => useCveReport());
+    await waitFor(() => expect(result.current.kind).toBe('data'));
+    expect((result.current as any).trendReady).toBe(false);
   });
 
   it('leaves delta undefined with fewer than two covered points', async () => {
