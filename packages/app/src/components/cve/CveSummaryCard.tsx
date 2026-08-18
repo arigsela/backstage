@@ -79,9 +79,10 @@ export const CveSummaryCard = () => {
     );
   }
 
-  const { totals, delta, trend, scannedAt } = state;
+  const { totals, delta, trend, trendReady, scannedAt } = state;
+  // Pure shape adaptation for the SVG component; trendReady itself is a
+  // precomputed decision from useCveReport, not something computed here.
   const points = trend.map(p => ({ value: p.actionable, covered: p.covered }));
-  const hasTrend = trend.filter(p => p.covered).length >= 2;
 
   return (
     <InfoCard title={TITLE}>
@@ -107,7 +108,7 @@ export const CveSummaryCard = () => {
       </Box>
 
       <Box mt={1} mb={1}>
-        {hasTrend ? (
+        {trendReady ? (
           <Sparkline points={points} />
         ) : (
           <Typography variant="caption" className={classes.muted}>

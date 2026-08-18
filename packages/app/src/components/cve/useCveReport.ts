@@ -45,7 +45,23 @@ export type CveState =
       totals: { critical: number; high: number; actionable: number };
       findings: Finding[];
       trend: TrendPoint[];
-      /** Change vs the previous covered week. Undefined with <2 covered points. */
+      /**
+       * Whether `trend` contains at least one pair of index-adjacent covered
+       * weeks — exactly the condition under which Sparkline can draw a
+       * segment. This is a view-readiness decision, computed once here so
+       * the card never has to (and can't drift from what the chart can
+       * actually render). A looser test like "two covered points anywhere"
+       * can be true while every covered point is isolated by gaps, which
+       * left the card rendering a blank `<svg>` instead of the "trend
+       * needs another scan" fallback.
+       */
+      trendReady: boolean;
+      /**
+       * Change vs the immediately preceding scan. Defined ONLY when the
+       * final two trend entries are both covered — comparing against a scan
+       * that did not cover this repo would produce a real number with a
+       * false label ("vs last scan" when the last scan skipped this repo).
+       */
       delta?: number;
     }
   | { kind: 'error'; message: string };
@@ -71,13 +87,27 @@ export function imagesFromKubernetesObjects(objects: any): string[] {
   return Array.from(new Set(out));
 }
 
+/**
+ * True when at least one pair of index-adjacent trend entries are both
+ * covered. This mirrors Sparkline's own segment-building rule (a run needs
+ * >= 2 consecutive covered points to draw a line) so the readiness flag can
+ * never say "yes" when the chart would actually render nothing.
+ */
+function hasAdjacentCoveredPair(trend: TrendPoint[]): boolean {
+  for (let i = 0; i < trend.length - 1; i++) {
+    if (trend[i].covered && trend[i + 1].covered) return true;
+  }
+  return false;
+}
+
 function deltaFrom(trend: TrendPoint[]): number | undefined {
-  const covered = trend.filter(p => p.covered);
-  if (covered.length < 2) return undefined;
-  return (
-    covered[covered.length - 1].actionable -
-    covered[covered.length - 2].actionable
-  );
+  if (trend.length < 2) return undefined;
+  const last = trend[trend.length - 1];
+  const prev = trend[trend.length - 2];
+  // Both entries must be covered: diffing across an uncovered gap produces a
+  // real-looking number attached to a false "vs last scan" claim.
+  if (!last.covered || !prev.covered) return undefined;
+  return last.actionable - prev.actionable;
 }
 
 export function useCveReport(): CveState {
@@ -140,6 +170,7 @@ export function useCveReport(): CveState {
           totals: body.totals,
           findings: body.findings,
           trend: body.trend,
+          trendReady: hasAdjacentCoveredPair(body.trend ?? []),
           delta: deltaFrom(body.trend ?? []),
         });
       })

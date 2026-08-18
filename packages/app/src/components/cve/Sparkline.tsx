@@ -57,6 +57,14 @@ export const Sparkline = ({
   });
   if (current.length > 1) segments.push(current.join(' '));
 
+  // Defence in depth: `covered.length >= 2` above only guarantees enough
+  // covered points *somewhere*, not that any two are adjacent. Scattered
+  // covered points (each isolated by a gap) pass that check yet produce zero
+  // drawable segments — without this, the result would be an empty <svg>,
+  // which reads as "no data" without explaining why. Returning null lets the
+  // caller show a real fallback instead.
+  if (segments.length === 0) return null;
+
   return (
     <svg
       width={width}
