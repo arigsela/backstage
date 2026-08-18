@@ -130,7 +130,7 @@ describe('useCveReport', () => {
     );
     const { result } = renderHook(() => useCveReport());
     await waitFor(() => expect(result.current.kind).not.toBe('loading'));
-    expect(result.current.kind).not.toBe('clean');
+    expect(result.current.kind).toBe('not-scanned');
   });
 
   it('reports data with totals and trend when findings exist', async () => {
@@ -153,6 +153,29 @@ describe('useCveReport', () => {
     const s = result.current as any;
     expect(s.totals.actionable).toBe(196);
     expect(s.delta).toBe(-12);
+  });
+
+  it('computes delta from the two covered points either side of a gap', async () => {
+    // A regression that drops the `.covered` filter in deltaFrom would happily
+    // diff against the uncovered midpoint instead of skipping over it.
+    mockUseKubernetesObjects.mockReturnValue(k8sWithImages(['team/app:v1']));
+    (global.fetch as jest.Mock).mockResolvedValue(
+      okResponse({
+        ok: true, scannedAt: '2026-08-17',
+        matchedRefs: ['team/app:v1'], unmatchedRefs: [],
+        totals: { critical: 41, high: 155, actionable: 196 },
+        findings: [{ id: 'CVE-1', pkg: 'openssl', installed: '1', fixed: '2',
+                     severity: 'CRITICAL', title: 't', image: 'team/app:v1' }],
+        trend: [
+          { date: '2026-08-03', actionable: 208, covered: true },
+          { date: '2026-08-10', actionable: 0, covered: false },
+          { date: '2026-08-17', actionable: 196, covered: true },
+        ],
+      }),
+    );
+    const { result } = renderHook(() => useCveReport());
+    await waitFor(() => expect(result.current.kind).toBe('data'));
+    expect((result.current as any).delta).toBe(-12);
   });
 
   it('leaves delta undefined with fewer than two covered points', async () => {
