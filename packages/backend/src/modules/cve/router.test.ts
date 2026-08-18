@@ -5,7 +5,10 @@ import { reduceReport, historyPointFromRaw } from './aggregate';
 import type { RawReport } from './types';
 
 const logger = {
-  info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+  debug: jest.fn(),
   child: jest.fn().mockReturnThis(),
 } as any;
 
@@ -14,8 +17,13 @@ function report(image: string, ids: string[]): RawReport {
     scanned: [image],
     failed: [],
     findings: ids.map(id => ({
-      image, id, pkg: 'openssl', installed: '3.0.11',
-      fixed: '3.0.14', severity: 'CRITICAL', title: 't',
+      image,
+      id,
+      pkg: 'openssl',
+      installed: '3.0.11',
+      fixed: '3.0.14',
+      severity: 'CRITICAL',
+      title: 't',
     })),
   };
 }
@@ -26,11 +34,21 @@ function stubStore(over: any = {}) {
       date: '2026-08-17',
       reduced: reduceReport(report('team/app:v2', ['CVE-1', 'CVE-2'])),
     }),
-    getHistory: jest.fn().mockResolvedValue([
-      historyPointFromRaw('2026-08-10', report('team/app:v1', ['CVE-1', 'CVE-2', 'CVE-3'])),
-      historyPointFromRaw('2026-08-17', report('team/app:v2', ['CVE-1', 'CVE-2'])),
-    ]),
-    health: jest.fn().mockResolvedValue({ keysFound: 3, dates: ['2026-08-17'] }),
+    getHistory: jest
+      .fn()
+      .mockResolvedValue([
+        historyPointFromRaw(
+          '2026-08-10',
+          report('team/app:v1', ['CVE-1', 'CVE-2', 'CVE-3']),
+        ),
+        historyPointFromRaw(
+          '2026-08-17',
+          report('team/app:v2', ['CVE-1', 'CVE-2']),
+        ),
+      ]),
+    health: jest
+      .fn()
+      .mockResolvedValue({ keysFound: 3, dates: ['2026-08-17'] }),
     ...over,
   } as any;
 }
@@ -82,16 +100,26 @@ describe('POST /report', () => {
 
   it('marks a week that did not scan the repo as not covered', async () => {
     const store = stubStore({
-      getHistory: jest.fn().mockResolvedValue([
-        historyPointFromRaw('2026-08-10', report('other/thing:v1', ['CVE-9'])),
-        historyPointFromRaw('2026-08-17', report('team/app:v2', ['CVE-1', 'CVE-2'])),
-      ]),
+      getHistory: jest
+        .fn()
+        .mockResolvedValue([
+          historyPointFromRaw(
+            '2026-08-10',
+            report('other/thing:v1', ['CVE-9']),
+          ),
+          historyPointFromRaw(
+            '2026-08-17',
+            report('team/app:v2', ['CVE-1', 'CVE-2']),
+          ),
+        ]),
     });
     const res = await request(await appWith(store))
       .post('/report')
       .send({ images: ['team/app:v2'] });
     expect(res.body.trend[0]).toEqual({
-      date: '2026-08-10', actionable: 0, covered: false,
+      date: '2026-08-10',
+      actionable: 0,
+      covered: false,
     });
   });
 
@@ -103,16 +131,23 @@ describe('POST /report', () => {
     // and the only covered:false fixture happens to have zero actionable) —
     // this case decouples the two so that confounded mistake gets caught.
     const store = stubStore({
-      getHistory: jest.fn().mockResolvedValue([
-        historyPointFromRaw('2026-08-10', report('team/app:v3', [])),
-        historyPointFromRaw('2026-08-17', report('team/app:v2', ['CVE-1', 'CVE-2'])),
-      ]),
+      getHistory: jest
+        .fn()
+        .mockResolvedValue([
+          historyPointFromRaw('2026-08-10', report('team/app:v3', [])),
+          historyPointFromRaw(
+            '2026-08-17',
+            report('team/app:v2', ['CVE-1', 'CVE-2']),
+          ),
+        ]),
     });
     const res = await request(await appWith(store))
       .post('/report')
       .send({ images: ['team/app:v2'] });
     expect(res.body.trend[0]).toEqual({
-      date: '2026-08-10', actionable: 0, covered: true,
+      date: '2026-08-10',
+      actionable: 0,
+      covered: true,
     });
   });
 

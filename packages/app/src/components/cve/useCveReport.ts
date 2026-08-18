@@ -74,7 +74,10 @@ export function imagesFromKubernetesObjects(objects: any): string[] {
 function deltaFrom(trend: TrendPoint[]): number | undefined {
   const covered = trend.filter(p => p.covered);
   if (covered.length < 2) return undefined;
-  return covered[covered.length - 1].actionable - covered[covered.length - 2].actionable;
+  return (
+    covered[covered.length - 1].actionable -
+    covered[covered.length - 2].actionable
+  );
 }
 
 export function useCveReport(): CveState {
@@ -156,7 +159,11 @@ export function useCveReport(): CveState {
     // depending on its derived, deduped image list only re-fires when the set
     // of images actually changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, error, JSON.stringify(imagesFromKubernetesObjects(kubernetesObjects))]);
+  }, [
+    loading,
+    error,
+    JSON.stringify(imagesFromKubernetesObjects(kubernetesObjects)),
+  ]);
 
   return state;
 }

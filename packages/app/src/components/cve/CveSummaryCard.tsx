@@ -27,7 +27,11 @@ export const CveSummaryCard = () => {
   const state = useCveReport();
 
   if (state.kind === 'loading') {
-    return <InfoCard title={TITLE}><Progress /></InfoCard>;
+    return (
+      <InfoCard title={TITLE}>
+        <Progress />
+      </InfoCard>
+    );
   }
 
   if (state.kind === 'error') {
@@ -44,7 +48,8 @@ export const CveSummaryCard = () => {
     return (
       <InfoCard title={TITLE}>
         <Typography variant="body2" className={classes.muted}>
-          No running workloads — can't determine which images this component uses.
+          No running workloads — can't determine which images this component
+          uses.
         </Typography>
       </InfoCard>
     );
@@ -83,7 +88,11 @@ export const CveSummaryCard = () => {
       <Box display="flex" alignItems="center" justifyContent="space-between">
         <Box>
           <span className={classes.count}>{totals.actionable}</span>{' '}
-          <Typography variant="body2" component="span" className={classes.muted}>
+          <Typography
+            variant="body2"
+            component="span"
+            className={classes.muted}
+          >
             actionable
           </Typography>
         </Box>
@@ -113,7 +122,12 @@ export const CveSummaryCard = () => {
         <span className={classes.high}>HIGH {totals.high}</span>
       </Typography>
 
-      <Box mt={1} display="flex" justifyContent="space-between" alignItems="center">
+      <Box
+        mt={1}
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+      >
         <Typography variant="caption" className={classes.muted}>
           Scanned {scannedAt}
         </Typography>
