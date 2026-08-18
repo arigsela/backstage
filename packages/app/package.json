@@ -29,6 +29,7 @@
     "@backstage/plugin-catalog-react": "^3.1.0",
     "@backstage/plugin-home": "^0.9.8",
     "@backstage/plugin-kubernetes": "^0.12.20",
+    "@backstage/plugin-kubernetes-react": "^0.5.23",
     "@backstage/plugin-notifications": "^0.5.18",
     "@backstage/plugin-org": "^0.7.5",
     "@backstage/plugin-permission-react": "^0.5.2",
