@@ -39,9 +39,24 @@ ENV PYTHON=/usr/bin/python3
 # The scaffolder plugin uses `isolate-vm` (a V8 isolate for sandboxing),
 # which requires compilation from C++ source during `yarn install`.
 # --mount=type=cache: Reuses the apt cache across builds (BuildKit feature)
+#
+# `apt-get upgrade -y`: pulls in patched versions of whatever OS packages are
+# already on the base image (pinned by the `node:24-trixie-slim` tag, which
+# does not move just because Debian ships a security update). Paired with
+# `--pull` in scripts/build-and-push.sh so there's a fresh base to upgrade
+# from, not a stale cached one. Honest sizing: a containerized Trivy scan of
+# the current image (v1.4.12, CRITICAL+HIGH, --ignore-unfixed) found 204
+# actionable findings, of which only 74 (36%) are Debian OS packages —
+# dominated by linux-libc-dev (61), which is a transitive of build-essential
+# below and installed here rather than in a minimal runtime layer. This line
+# addresses that slice, not the majority: the largest single class (129
+# findings, 63%) is Node.js production dependency transitives (vm2,
+# brace-expansion, tar, axios, undici, ...), which is out of scope for this
+# change — see docs/superpowers/plans/2026-08-18-container-cve-surfacing-HANDOVER.md.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends python3 g++ build-essential && \
     rm -rf /var/lib/apt/lists/*
 
