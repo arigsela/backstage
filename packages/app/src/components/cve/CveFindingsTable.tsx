@@ -66,11 +66,22 @@ export const CveFindingsTable = () => {
 
   if (state.kind === 'clean') {
     return (
-      <EmptyState
-        missing="content"
-        title="No actionable vulnerabilities"
-        description={`Scanned ${state.scannedAt}. Actionable means CRITICAL or HIGH with a published fix.`}
-      />
+      <>
+        <EmptyState
+          missing="content"
+          title="No actionable vulnerabilities"
+          description={`Scanned ${state.scannedAt}. Actionable means CRITICAL or HIGH with a published fix.`}
+        />
+        {state.unmatchedRefs.length > 0 && (
+          // Same caveat as CveSummaryCard: this component also runs at least
+          // one image the scan never covered, so "No actionable
+          // vulnerabilities" describes matchedRefs only, not the whole
+          // component.
+          <Typography variant="caption" color="textSecondary">
+            Not covered by the scan: {state.unmatchedRefs.join(', ')}
+          </Typography>
+        )}
+      </>
     );
   }
 

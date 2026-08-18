@@ -36,7 +36,21 @@ export type CveState =
   | { kind: 'loading' }
   | { kind: 'no-workloads' }
   | { kind: 'not-scanned'; refs: string[] }
-  | { kind: 'clean'; scannedAt: string; matchedRefs: string[] }
+  | {
+      kind: 'clean';
+      scannedAt: string;
+      matchedRefs: string[];
+      /**
+       * Images this component runs that the scan did NOT cover. A component
+       * can run two images — one scanned-and-clean, one never scanned — and
+       * that combination must never render as an unqualified "No actionable
+       * vulnerabilities": the unscanned image could hide anything. Carrying
+       * this through is what lets the card and table caveat the claim instead
+       * of dropping it, which is exactly the false-clean this feature exists
+       * to prevent (see CveSummaryCard / CveFindingsTable).
+       */
+      unmatchedRefs: string[];
+    }
   | {
       kind: 'data';
       scannedAt: string;
@@ -159,6 +173,7 @@ export function useCveReport(): CveState {
             kind: 'clean',
             scannedAt: body.scannedAt,
             matchedRefs: body.matchedRefs,
+            unmatchedRefs: body.unmatchedRefs ?? [],
           });
           return;
         }

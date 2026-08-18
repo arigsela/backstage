@@ -28,6 +28,26 @@ function report(image: string, ids: string[]): RawReport {
   };
 }
 
+/** Like `report`, but scans multiple images and lets findings target any of them. */
+function multiReport(
+  scanned: string[],
+  findings: { image: string; id: string }[],
+): RawReport {
+  return {
+    scanned,
+    failed: [],
+    findings: findings.map(f => ({
+      image: f.image,
+      id: f.id,
+      pkg: 'openssl',
+      installed: '3.0.11',
+      fixed: '3.0.14',
+      severity: 'CRITICAL',
+      title: 't',
+    })),
+  };
+}
+
 function stubStore(over: any = {}) {
   return {
     getLatest: jest.fn().mockResolvedValue({
@@ -147,6 +167,87 @@ describe('POST /report', () => {
     expect(res.body.trend[0]).toEqual({
       date: '2026-08-10',
       actionable: 0,
+      covered: true,
+    });
+  });
+
+  it('does not double-count a repo running two tags in the trend', async () => {
+    // Fix B regression: two tags of one repo (mid-rollout) both normalize to
+    // the same repo path. Before deduping `repos`, the newest trend point
+    // summed that repo's count twice while the headline (deduped in
+    // aggregate.ts) counted it once — a phantom "+N" regression between the
+    // headline and the sparkline's own last point.
+    const store = stubStore({
+      getLatest: jest.fn().mockResolvedValue({
+        date: '2026-08-17',
+        reduced: reduceReport(report('team/app:v2', ['CVE-1', 'CVE-2'])),
+      }),
+      getHistory: jest
+        .fn()
+        .mockResolvedValue([
+          historyPointFromRaw(
+            '2026-08-17',
+            report('team/app:v2', ['CVE-1', 'CVE-2']),
+          ),
+        ]),
+    });
+    const res = await request(await appWith(store))
+      .post('/report')
+      .send({ images: ['team/app:v2', 'team/app:v3'] });
+    // Two pod-running tags of the same repo both match the one scanned repo.
+    expect(res.body.matchedRefs).toEqual(['team/app:v2', 'team/app:v3']);
+    expect(res.body.totals.actionable).toBe(2);
+    const newest = res.body.trend[res.body.trend.length - 1];
+    expect(newest.actionable).toBe(res.body.totals.actionable);
+  });
+
+  it('marks a week as a gap, not a real point, when it only scanned some of a multi-image component', async () => {
+    // Fix C regression: with `some`, a week that scanned only one of two
+    // repos was marked covered while `actionable` summed only the scanned
+    // subset — a fake improvement with a real-looking "vs last scan" delta
+    // attached to a report that was actually incomplete that week.
+    const store = stubStore({
+      // Latest scan covers both repos, so both are matched — this is the
+      // component's current two-image shape.
+      getLatest: jest.fn().mockResolvedValue({
+        date: '2026-08-17',
+        reduced: reduceReport(
+          multiReport(
+            ['team/app:v2', 'team/api:v1'],
+            [{ image: 'team/app:v2', id: 'CVE-1' }],
+          ),
+        ),
+      }),
+      getHistory: jest.fn().mockResolvedValue([
+        // Only team/app was scanned this week; team/api was not.
+        historyPointFromRaw(
+          '2026-08-10',
+          multiReport(['team/app:v1'], [{ image: 'team/app:v1', id: 'CVE-1' }]),
+        ),
+        historyPointFromRaw(
+          '2026-08-17',
+          multiReport(
+            ['team/app:v2', 'team/api:v1'],
+            [
+              { image: 'team/app:v2', id: 'CVE-1' },
+              { image: 'team/api:v1', id: 'CVE-2' },
+            ],
+          ),
+        ),
+      ]),
+    });
+    const res = await request(await appWith(store))
+      .post('/report')
+      .send({ images: ['team/app:v2', 'team/api:v1'] });
+    expect(res.body.matchedRefs).toEqual(['team/app:v2', 'team/api:v1']);
+    expect(res.body.trend[0]).toEqual({
+      date: '2026-08-10',
+      actionable: 1,
+      covered: false,
+    });
+    expect(res.body.trend[1]).toEqual({
+      date: '2026-08-17',
+      actionable: 2,
       covered: true,
     });
   });

@@ -17,8 +17,20 @@ import type { CveConfig } from './config';
 import type { ReportSource } from './s3Client';
 import type { HistoryPoint, RawReport, ReducedReport } from './types';
 
-/** Matches `cve-reports/2026-08-17.json` and captures the date. */
-const DATED_KEY = /(\d{4}-\d{2}-\d{2})\.json$/;
+/**
+ * Matches `cve-reports/2026-08-17.json` and captures the date.
+ *
+ * Anchored to the start of the basename (`^` or after the last `/`), not just
+ * the `.json` suffix. This bucket is a general Argo artifacts bucket written
+ * by another repo, not ours alone — an unrelated object like
+ * `cve-reports/backup-2026-09-01.json` still ends in `\d{4}-\d{2}-\d{2}\.json`
+ * and, unanchored, would extract a date whose corresponding
+ * `${prefix}${date}.json` key does not exist. getHistory() would then throw
+ * fetching it, and the router turns any store throw into REPORT_UNAVAILABLE
+ * for every component — one stray object in someone else's write path taking
+ * the whole card down permanently.
+ */
+const DATED_KEY = /(?:^|\/)(\d{4}-\d{2}-\d{2})\.json$/;
 
 export class ReportStore {
   private latest?: { fetchedAt: number; date: string; reduced: ReducedReport };

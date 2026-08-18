@@ -131,6 +131,30 @@ describe('useCveReport', () => {
     await waitFor(() => expect(result.current.kind).toBe('clean'));
   });
 
+  it('carries unmatchedRefs on clean so a partially-scanned component is not falsely reassuring', async () => {
+    // Finding A fix: a component running two images — one scanned-and-clean,
+    // one never scanned — must not collapse to an unqualified "clean". The
+    // hook has to carry the uncovered refs through so the components can
+    // caveat the claim rather than drop it.
+    mockUseKubernetesObjects.mockReturnValue(
+      k8sWithImages(['team/app:v1', 'team/other:v1']),
+    );
+    (global.fetch as jest.Mock).mockResolvedValue(
+      okResponse({
+        ok: true,
+        scannedAt: '2026-08-17',
+        matchedRefs: ['team/app:v1'],
+        unmatchedRefs: ['team/other:v1'],
+        totals: { critical: 0, high: 0, actionable: 0 },
+        findings: [],
+        trend: [],
+      }),
+    );
+    const { result } = renderHook(() => useCveReport());
+    await waitFor(() => expect(result.current.kind).toBe('clean'));
+    expect((result.current as any).unmatchedRefs).toEqual(['team/other:v1']);
+  });
+
   it('distinguishes clean from not-scanned', async () => {
     // The single most important assertion in this file: both are "no findings",
     // only one means safe.
