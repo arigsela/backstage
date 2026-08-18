@@ -18,7 +18,9 @@ function k8sWithImages(images: string[]) {
           resources: [
             {
               type: 'pods',
-              resources: [{ spec: { containers: images.map(image => ({ image })) } }],
+              resources: [
+                { spec: { containers: images.map(image => ({ image })) } },
+              ],
             },
           ],
         },
@@ -60,7 +62,11 @@ describe('imagesFromKubernetesObjects', () => {
         },
       ],
     };
-    expect(imagesFromKubernetesObjects(objects).sort()).toEqual(['a:1', 'b:1', 'c:1']);
+    expect(imagesFromKubernetesObjects(objects).sort()).toEqual([
+      'a:1',
+      'b:1',
+      'c:1',
+    ]);
   });
 
   it('ignores non-pod resource groups', () => {
@@ -94,9 +100,13 @@ describe('useCveReport', () => {
     mockUseKubernetesObjects.mockReturnValue(k8sWithImages(['team/never:v1']));
     (global.fetch as jest.Mock).mockResolvedValue(
       okResponse({
-        ok: true, scannedAt: '2026-08-17',
-        matchedRefs: [], unmatchedRefs: ['team/never:v1'],
-        totals: { critical: 0, high: 0, actionable: 0 }, findings: [], trend: [],
+        ok: true,
+        scannedAt: '2026-08-17',
+        matchedRefs: [],
+        unmatchedRefs: ['team/never:v1'],
+        totals: { critical: 0, high: 0, actionable: 0 },
+        findings: [],
+        trend: [],
       }),
     );
     const { result } = renderHook(() => useCveReport());
@@ -108,9 +118,13 @@ describe('useCveReport', () => {
     mockUseKubernetesObjects.mockReturnValue(k8sWithImages(['team/app:v1']));
     (global.fetch as jest.Mock).mockResolvedValue(
       okResponse({
-        ok: true, scannedAt: '2026-08-17',
-        matchedRefs: ['team/app:v1'], unmatchedRefs: [],
-        totals: { critical: 0, high: 0, actionable: 0 }, findings: [], trend: [],
+        ok: true,
+        scannedAt: '2026-08-17',
+        matchedRefs: ['team/app:v1'],
+        unmatchedRefs: [],
+        totals: { critical: 0, high: 0, actionable: 0 },
+        findings: [],
+        trend: [],
       }),
     );
     const { result } = renderHook(() => useCveReport());
@@ -123,9 +137,13 @@ describe('useCveReport', () => {
     mockUseKubernetesObjects.mockReturnValue(k8sWithImages(['a:1']));
     (global.fetch as jest.Mock).mockResolvedValue(
       okResponse({
-        ok: true, scannedAt: '2026-08-17',
-        matchedRefs: [], unmatchedRefs: ['a:1'],
-        totals: { critical: 0, high: 0, actionable: 0 }, findings: [], trend: [],
+        ok: true,
+        scannedAt: '2026-08-17',
+        matchedRefs: [],
+        unmatchedRefs: ['a:1'],
+        totals: { critical: 0, high: 0, actionable: 0 },
+        findings: [],
+        trend: [],
       }),
     );
     const { result } = renderHook(() => useCveReport());
@@ -137,11 +155,22 @@ describe('useCveReport', () => {
     mockUseKubernetesObjects.mockReturnValue(k8sWithImages(['team/app:v1']));
     (global.fetch as jest.Mock).mockResolvedValue(
       okResponse({
-        ok: true, scannedAt: '2026-08-17',
-        matchedRefs: ['team/app:v1'], unmatchedRefs: [],
+        ok: true,
+        scannedAt: '2026-08-17',
+        matchedRefs: ['team/app:v1'],
+        unmatchedRefs: [],
         totals: { critical: 41, high: 155, actionable: 196 },
-        findings: [{ id: 'CVE-1', pkg: 'openssl', installed: '1', fixed: '2',
-                     severity: 'CRITICAL', title: 't', image: 'team/app:v1' }],
+        findings: [
+          {
+            id: 'CVE-1',
+            pkg: 'openssl',
+            installed: '1',
+            fixed: '2',
+            severity: 'CRITICAL',
+            title: 't',
+            image: 'team/app:v1',
+          },
+        ],
         trend: [
           { date: '2026-08-10', actionable: 208, covered: true },
           { date: '2026-08-17', actionable: 196, covered: true },
@@ -161,11 +190,22 @@ describe('useCveReport', () => {
     mockUseKubernetesObjects.mockReturnValue(k8sWithImages(['team/app:v1']));
     (global.fetch as jest.Mock).mockResolvedValue(
       okResponse({
-        ok: true, scannedAt: '2026-08-17',
-        matchedRefs: ['team/app:v1'], unmatchedRefs: [],
+        ok: true,
+        scannedAt: '2026-08-17',
+        matchedRefs: ['team/app:v1'],
+        unmatchedRefs: [],
         totals: { critical: 41, high: 155, actionable: 196 },
-        findings: [{ id: 'CVE-1', pkg: 'openssl', installed: '1', fixed: '2',
-                     severity: 'CRITICAL', title: 't', image: 'team/app:v1' }],
+        findings: [
+          {
+            id: 'CVE-1',
+            pkg: 'openssl',
+            installed: '1',
+            fixed: '2',
+            severity: 'CRITICAL',
+            title: 't',
+            image: 'team/app:v1',
+          },
+        ],
         trend: [
           { date: '2026-08-03', actionable: 208, covered: true },
           { date: '2026-08-10', actionable: 0, covered: false },
@@ -182,11 +222,22 @@ describe('useCveReport', () => {
     mockUseKubernetesObjects.mockReturnValue(k8sWithImages(['team/app:v1']));
     (global.fetch as jest.Mock).mockResolvedValue(
       okResponse({
-        ok: true, scannedAt: '2026-08-17',
-        matchedRefs: ['team/app:v1'], unmatchedRefs: [],
+        ok: true,
+        scannedAt: '2026-08-17',
+        matchedRefs: ['team/app:v1'],
+        unmatchedRefs: [],
         totals: { critical: 1, high: 0, actionable: 1 },
-        findings: [{ id: 'CVE-1', pkg: 'p', installed: '1', fixed: '2',
-                     severity: 'CRITICAL', title: 't', image: 'team/app:v1' }],
+        findings: [
+          {
+            id: 'CVE-1',
+            pkg: 'p',
+            installed: '1',
+            fixed: '2',
+            severity: 'CRITICAL',
+            title: 't',
+            image: 'team/app:v1',
+          },
+        ],
         trend: [{ date: '2026-08-17', actionable: 1, covered: true }],
       }),
     );
@@ -198,7 +249,11 @@ describe('useCveReport', () => {
   it('surfaces a backend failure as error, never as zero', async () => {
     mockUseKubernetesObjects.mockReturnValue(k8sWithImages(['team/app:v1']));
     (global.fetch as jest.Mock).mockResolvedValue(
-      okResponse({ ok: false, code: 'REPORT_UNAVAILABLE', message: 'AccessDenied' }),
+      okResponse({
+        ok: false,
+        code: 'REPORT_UNAVAILABLE',
+        message: 'AccessDenied',
+      }),
     );
     const { result } = renderHook(() => useCveReport());
     await waitFor(() => expect(result.current.kind).toBe('error'));
@@ -207,7 +262,9 @@ describe('useCveReport', () => {
 
   it('surfaces a kubernetes error as error', async () => {
     mockUseKubernetesObjects.mockReturnValue({
-      loading: false, error: 'cluster unreachable', kubernetesObjects: undefined,
+      loading: false,
+      error: 'cluster unreachable',
+      kubernetesObjects: undefined,
     });
     const { result } = renderHook(() => useCveReport());
     await waitFor(() => expect(result.current.kind).toBe('error'));

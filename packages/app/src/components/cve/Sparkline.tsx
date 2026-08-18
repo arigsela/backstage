@@ -51,12 +51,19 @@ export const Sparkline = ({
       current = [];
       return;
     }
-    current.push(`${current.length === 0 ? 'M' : 'L'}${i * step},${yOf(p.value)}`);
+    current.push(
+      `${current.length === 0 ? 'M' : 'L'}${i * step},${yOf(p.value)}`,
+    );
   });
   if (current.length > 1) segments.push(current.join(' '));
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden>
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      aria-hidden
+    >
       {segments.map((d, i) => (
         <path key={i} d={d} className={classes.line} />
       ))}
