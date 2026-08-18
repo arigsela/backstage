@@ -149,6 +149,12 @@ export function useCveReport(): CveState {
     return () => {
       cancelled = true;
     };
+    // Depend on the *stringified derived image list*, not `kubernetesObjects`
+    // itself: useKubernetesObjects polls and hands back a new object identity
+    // every tick even when nothing running has changed. Depending on the object
+    // would re-fire this effect (and re-hit the cve backend) on every poll;
+    // depending on its derived, deduped image list only re-fires when the set
+    // of images actually changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, error, JSON.stringify(imagesFromKubernetesObjects(kubernetesObjects))]);
 
