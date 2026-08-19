@@ -327,3 +327,65 @@ describe('useCveReport', () => {
     await waitFor(() => expect(result.current.kind).toBe('error'));
   });
 });
+
+describe('polling behaviour', () => {
+  it('polls Kubernetes hourly, not at the 10s default', () => {
+    // The report regenerates weekly and the backend caches it for an hour, so
+    // a faster poll cannot surface newer data — it only costs requests and
+    // makes the card flicker.
+    mockUseKubernetesObjects.mockReturnValue(k8sWithImages(['team/app:v1']));
+    (global.fetch as jest.Mock).mockResolvedValue(
+      okResponse({
+        ok: true,
+        scannedAt: '2026-08-17',
+        matchedRefs: ['team/app:v1'],
+        unmatchedRefs: [],
+        totals: { critical: 0, high: 0, actionable: 0 },
+        findings: [],
+        trend: [],
+      }),
+    );
+    renderHook(() => useCveReport());
+    expect(mockUseKubernetesObjects).toHaveBeenCalledWith(
+      expect.anything(),
+      60 * 60 * 1000,
+    );
+  });
+
+  it('keeps the previous result on screen while a later poll revalidates', async () => {
+    // Guards the flicker: blanking back to a skeleton on every refresh reads
+    // as "the data went away".
+    mockUseKubernetesObjects.mockReturnValue(k8sWithImages(['team/app:v1']));
+    (global.fetch as jest.Mock).mockResolvedValue(
+      okResponse({
+        ok: true,
+        scannedAt: '2026-08-17',
+        matchedRefs: ['team/app:v1'],
+        unmatchedRefs: [],
+        totals: { critical: 1, high: 0, actionable: 1 },
+        findings: [
+          {
+            id: 'CVE-1',
+            pkg: 'p',
+            installed: '1',
+            fixed: '2',
+            severity: 'CRITICAL',
+            title: 't',
+            image: 'team/app:v1',
+          },
+        ],
+        trend: [{ date: '2026-08-17', actionable: 1, covered: true }],
+      }),
+    );
+    const { result, rerender } = renderHook(() => useCveReport());
+    await waitFor(() => expect(result.current.kind).toBe('data'));
+
+    // A poll tick flips loading back to true with the same images.
+    mockUseKubernetesObjects.mockReturnValue({
+      ...k8sWithImages(['team/app:v1']),
+      loading: true,
+    });
+    rerender();
+    expect(result.current.kind).toBe('data');
+  });
+});
