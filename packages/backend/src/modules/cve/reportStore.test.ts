@@ -157,3 +157,94 @@ describe('ReportStore.getHistory', () => {
     ]);
   });
 });
+
+describe('trend and headline share one TTL', () => {
+  // Regression guard for a real inconsistency: getLatest is TTL-cached but
+  // getHistory used to re-list S3 every call, so a freshly-written dated
+  // report showed up in the sparkline while the headline still served the
+  // previous run — the card displaying two scans' numbers side by side.
+  const base = {
+    'cve-reports/latest.json': report('team/app:v1', ['CVE-1']),
+    'cve-reports/2026-08-17.json': report('team/app:v1', ['CVE-1']),
+  };
+
+  it('does not surface a newly written report until the TTL expires', async () => {
+    const objects: any = { ...base };
+    const { source } = fakeSource(objects);
+    let now = 1_000_000;
+    const store = new ReportStore(source, cfg, () => now);
+
+    await store.getLatest();
+    expect((await store.getHistory()).map(p => p.date)).toEqual(['2026-08-17']);
+
+    // A scan lands mid-TTL.
+    objects['cve-reports/2026-08-18.json'] = report('team/app:v2', [
+      'CVE-1',
+      'CVE-2',
+    ]);
+    objects['cve-reports/latest.json'] = report('team/app:v2', [
+      'CVE-1',
+      'CVE-2',
+    ]);
+
+    now += 30_000; // still inside the 60s TTL
+    const latest = await store.getLatest();
+    const history = await store.getHistory();
+    // Both halves still describe the OLD run — consistent with each other.
+    expect(latest.date).toBe('2026-08-17');
+    expect(history.map(p => p.date)).toEqual(['2026-08-17']);
+  });
+
+  it('surfaces it in both halves together once the TTL expires', async () => {
+    const objects: any = { ...base };
+    const { source } = fakeSource(objects);
+    let now = 1_000_000;
+    const store = new ReportStore(source, cfg, () => now);
+    await store.getLatest();
+
+    objects['cve-reports/2026-08-18.json'] = report('team/app:v2', [
+      'CVE-1',
+      'CVE-2',
+    ]);
+    objects['cve-reports/latest.json'] = report('team/app:v2', [
+      'CVE-1',
+      'CVE-2',
+    ]);
+
+    now += 120_000; // past the TTL
+    const latest = await store.getLatest();
+    const history = await store.getHistory();
+    expect(latest.date).toBe('2026-08-18');
+    expect(history.map(p => p.date)).toEqual(['2026-08-17', '2026-08-18']);
+  });
+
+  it('health() bypasses the cache so it can answer "have the keys landed?"', async () => {
+    const objects: any = { ...base };
+    const { source, listKeys } = fakeSource(objects);
+    let now = 1_000_000;
+    const store = new ReportStore(source, cfg, () => now);
+    await store.getLatest();
+
+    objects['cve-reports/2026-08-18.json'] = report('team/app:v2', ['CVE-1']);
+
+    now += 5_000; // well inside the TTL
+    const h = await store.health();
+    expect(h.dates).toEqual(['2026-08-18', '2026-08-17']);
+    // and it lists once, not twice
+    const before = listKeys.mock.calls.length;
+    await store.health();
+    expect(listKeys.mock.calls.length).toBe(before + 1);
+  });
+
+  it('reuses the cached listing instead of re-listing on every call', async () => {
+    const { source, listKeys } = fakeSource({ ...base });
+    let now = 1_000_000;
+    const store = new ReportStore(source, cfg, () => now);
+    await store.getLatest();
+    const calls = listKeys.mock.calls.length;
+    now += 10_000;
+    await store.getHistory();
+    await store.getHistory();
+    expect(listKeys.mock.calls.length).toBe(calls);
+  });
+});
