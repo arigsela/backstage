@@ -11,7 +11,7 @@
  * in EntityPage.tsx rather than a value here: this hook only runs where the
  * Kubernetes plugin is available.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEntity } from '@backstage/plugin-catalog-react';
 import { useKubernetesObjects } from '@backstage/plugin-kubernetes-react';
 
@@ -124,10 +124,30 @@ function deltaFrom(trend: TrendPoint[]): number | undefined {
   return last.actionable - prev.actionable;
 }
 
+/**
+ * How often to re-poll Kubernetes for this entity's running images.
+ *
+ * Deliberately one hour, matching the backend's `cve.cacheTtlMinutes`. The
+ * underlying report is regenerated once a week by a Sunday cron, and the
+ * backend serves `latest.json` from an in-memory cache for an hour, so polling
+ * faster than that cannot surface newer data — it only costs requests and, via
+ * the `loading` toggle below, makes the card flicker. `useKubernetesObjects`
+ * defaults to 10s, which is right for a live pod-status view and wrong here.
+ */
+const POLL_INTERVAL_MS = 60 * 60 * 1000;
+
 export function useCveReport(): CveState {
   const { entity } = useEntity();
-  const { kubernetesObjects, loading, error } = useKubernetesObjects(entity);
+  const { kubernetesObjects, loading, error } = useKubernetesObjects(
+    entity,
+    POLL_INTERVAL_MS,
+  );
   const [state, setState] = useState<CveState>({ kind: 'loading' });
+  // Tracks whether we have ever produced a terminal state. Once we have, a
+  // subsequent poll must NOT blank the card back to a skeleton — it keeps the
+  // previous result on screen while revalidating. Without this the card
+  // visibly empties on every refresh, which reads as "the data went away".
+  const hasResolved = useRef(false);
 
   // Depend on the *stringified derived image list*, not `kubernetesObjects`
   // itself: useKubernetesObjects polls and hands back a new object identity
@@ -143,10 +163,12 @@ export function useCveReport(): CveState {
 
   useEffect(() => {
     if (loading) {
-      setState({ kind: 'loading' });
+      // Skeleton only on first load; later polls keep the last result visible.
+      if (!hasResolved.current) setState({ kind: 'loading' });
       return undefined;
     }
     if (error) {
+      hasResolved.current = true;
       setState({ kind: 'error', message: String(error) });
       return undefined;
     }
@@ -154,12 +176,13 @@ export function useCveReport(): CveState {
     const images: string[] = JSON.parse(imagesKey);
     if (images.length === 0) {
       // Explicitly NOT "no vulnerabilities" — we could not determine the images.
+      hasResolved.current = true;
       setState({ kind: 'no-workloads' });
       return undefined;
     }
 
     let cancelled = false;
-    setState({ kind: 'loading' });
+    if (!hasResolved.current) setState({ kind: 'loading' });
 
     fetch('/api/cve/report', {
       method: 'POST',
@@ -169,6 +192,7 @@ export function useCveReport(): CveState {
       .then(res => res.json())
       .then(body => {
         if (cancelled) return;
+        hasResolved.current = true;
         if (!body?.ok) {
           setState({
             kind: 'error',
@@ -203,6 +227,7 @@ export function useCveReport(): CveState {
       })
       .catch(e => {
         if (!cancelled) {
+          hasResolved.current = true;
           setState({ kind: 'error', message: e?.message ?? String(e) });
         }
       });
