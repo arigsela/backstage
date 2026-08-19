@@ -32,9 +32,21 @@ import type { HistoryPoint, RawReport, ReducedReport } from './types';
  */
 const DATED_KEY = /(?:^|\/)(\d{4}-\d{2}-\d{2})\.json$/;
 
+/** Extract report dates from a key listing, newest first. Pure. */
+function datesFromKeys(keys: string[]): string[] {
+  return keys
+    .map(k => DATED_KEY.exec(k)?.[1])
+    .filter((d): d is string => Boolean(d))
+    .sort()
+    .reverse();
+}
+
 export class ReportStore {
   private latest?: { fetchedAt: number; date: string; reduced: ReducedReport };
   private readonly history = new Map<string, HistoryPoint>();
+  /** Undefined until the first listing; drives the same TTL as `latest`. */
+  private datesFetchedAt?: number;
+  private datesCache: string[] = [];
 
   constructor(
     private readonly source: ReportSource,
@@ -49,14 +61,30 @@ export class ReportStore {
     return parsed;
   }
 
-  /** All available report dates, newest first. */
+  /**
+   * All available report dates, newest first — TTL-cached alongside `latest`.
+   *
+   * The caching is the point, not an optimisation. `getLatest` is TTL-cached,
+   * so without this `getHistory` would re-list S3 on every request and pick up
+   * a brand-new dated report while the headline count was still serving the
+   * previous run from cache. The card would then show, say, "195 actionable"
+   * next to a delta of "down 63 vs last scan" — two numbers from two different
+   * scans, disagreeing on screen for up to an hour. Sharing one TTL means both
+   * halves of the card always describe the same run.
+   *
+   * `health()` deliberately does NOT go through here — see its comment.
+   */
   private async listDates(): Promise<string[]> {
+    if (
+      this.datesFetchedAt !== undefined &&
+      this.now() - this.datesFetchedAt < this.cfg.cacheTtlMs
+    ) {
+      return this.datesCache;
+    }
     const keys = await this.source.listKeys(this.cfg.prefix);
-    return keys
-      .map(k => DATED_KEY.exec(k)?.[1])
-      .filter((d): d is string => Boolean(d))
-      .sort()
-      .reverse();
+    this.datesCache = datesFromKeys(keys);
+    this.datesFetchedAt = this.now();
+    return this.datesCache;
   }
 
   async getLatest(): Promise<{ date: string; reduced: ReducedReport }> {
@@ -93,7 +121,11 @@ export class ReportStore {
 
   /** Diagnostic for "have the stable keys landed yet?" — see router GET /health. */
   async health(): Promise<{ keysFound: number; dates: string[] }> {
+    // Deliberately bypasses the TTL cache above. This route exists to answer
+    // "have the report keys landed yet?", so serving an hour-old listing would
+    // defeat its only purpose. Deriving the dates from the same listing also
+    // means one ListObjectsV2 call here, not two.
     const keys = await this.source.listKeys(this.cfg.prefix);
-    return { keysFound: keys.length, dates: await this.listDates() };
+    return { keysFound: keys.length, dates: datesFromKeys(keys) };
   }
 }
