@@ -1,42 +1,34 @@
 #!/usr/bin/env bash
-# Layer 3 test: validates that live kagent agents in the Backstage catalog
-# carry the v1 agents.platform.ai/* annotation contract.
+# Layer 3 test: validates that the live kagent agents in the Backstage catalog
+# were ingested from kagent 1.0 Agents (api.kagent.dev), which is what the
+# kagent-shared resolver and the entity-page card rely on.
+#
+# The old agents.platform.ai/* annotation contract this script used to check
+# was deleted from the Agent manifests on 2026-07-14.
 #
 # Usage:
 #   BACKSTAGE_URL=http://localhost:7007 \
 #   BACKSTAGE_TOKEN=<service-token-or-empty> \
+#   EXPECTED_AGENTS=7 \
 #   bash scripts/check-agent-contract.sh
+#
+# EXPECTED_AGENTS is optional; when set, fewer kagent-agent entities is a failure.
 #
 # Exit codes:
 #   0 = all live agents conform
-#   1 = at least one non-conforming agent
+#   1 = at least one non-conforming agent, or fewer than EXPECTED_AGENTS
 #   2 = infrastructure error (e.g. Backstage API unreachable or returned non-JSON)
 
 set -euo pipefail
 
 : "${BACKSTAGE_URL:?BACKSTAGE_URL is required (e.g. http://localhost:7007)}"
 TOKEN="${BACKSTAGE_TOKEN:-}"
+EXPECTED="${EXPECTED_AGENTS:-}"
 
 AUTH_ARG=()
 if [[ -n "$TOKEN" ]]; then
   AUTH_ARG=(-H "Authorization: Bearer $TOKEN")
 fi
-
-REQUIRED_ANNOTATIONS=(
-  "agents.platform.ai/version"
-  "agents.platform.ai/runtime"
-  "agents.platform.ai/description"
-  "agents.platform.ai/a2a-endpoint"
-  "agents.platform.ai/skills"
-  "agents.platform.ai/delegates"
-  "agents.platform.ai/capabilities"
-)
-
-JSON_ANNOTATIONS=(
-  "agents.platform.ai/skills"
-  "agents.platform.ai/delegates"
-  "agents.platform.ai/capabilities"
-)
 
 # Fetch all Component entities with spec.type == kagent-agent.
 # Note: ${AUTH_ARG[@]+"${AUTH_ARG[@]}"} is the set -u-safe way to expand an
@@ -50,47 +42,43 @@ if ! count="$(echo "$entities" | jq 'length' 2>/dev/null)"; then
   exit 2
 fi
 echo "Found $count kagent agent(s) in catalog"
-if [[ "$count" -eq 0 ]]; then
-  echo "Note: no agents to validate. Either none are deployed yet or the ingestor hasn't run."
-  exit 0
-fi
 
 fail_count=0
+if [[ -n "$EXPECTED" && "$count" -lt "$EXPECTED" ]]; then
+  echo "FAIL: expected at least $EXPECTED kagent agent(s)"
+  fail_count=$((fail_count + 1))
+fi
 
-while IFS= read -r entity_name; do
-  echo "=== $entity_name ==="
+ann() { # ann <entity-name> <annotation>
+  echo "$entities" | jq -r --arg n "$1" --arg a "$2" \
+    '.[] | select(.metadata.name == $n) | .metadata.annotations[$a] // empty'
+}
 
-  for ann in "${REQUIRED_ANNOTATIONS[@]}"; do
-    val="$(echo "$entities" | jq -r ".[] | select(.metadata.name == \"$entity_name\") | .metadata.annotations[\"$ann\"] // empty")"
-    if [[ -z "$val" ]]; then
-      echo "  FAIL: missing annotation: $ann"
-      fail_count=$((fail_count + 1))
-    fi
-  done
-
-  for ann in "${JSON_ANNOTATIONS[@]}"; do
-    val="$(echo "$entities" | jq -r ".[] | select(.metadata.name == \"$entity_name\") | .metadata.annotations[\"$ann\"] // empty")"
-    if [[ -n "$val" ]] && ! echo "$val" | jq empty 2>/dev/null; then
-      echo "  FAIL: $ann is not valid JSON: $val"
-      fail_count=$((fail_count + 1))
-    fi
-  done
-
-  # Strict v1 check; update when v2 contract is ratified.
-  # The presence-of-version check is covered by REQUIRED_ANNOTATIONS above, so
-  # only flag value mismatch here when the annotation is actually present.
-  version="$(echo "$entities" | jq -r ".[] | select(.metadata.name == \"$entity_name\") | .metadata.annotations[\"agents.platform.ai/version\"] // empty")"
-  if [[ -n "$version" && "$version" != "v1" ]]; then
-    echo "  FAIL: version is not 'v1' (got '$version')"
+while IFS= read -r name; do
+  echo "=== $name ==="
+  kind="$(ann "$name" terasky.backstage.io/kubernetes-resource-kind)"
+  api="$(ann "$name" terasky.backstage.io/kubernetes-resource-api-version)"
+  res_name="$(ann "$name" terasky.backstage.io/kubernetes-resource-name)"
+  res_ns="$(ann "$name" terasky.backstage.io/kubernetes-resource-namespace)"
+  if [[ "$kind" != "Agent" ]]; then
+    echo "  FAIL: ingested from kind '${kind:-?}', not Agent"
     fail_count=$((fail_count + 1))
   fi
-
-  echo "  done"
+  if [[ "$api" != api.kagent.dev/* ]]; then
+    echo "  FAIL: api version '${api:-?}' is not api.kagent.dev/*"
+    fail_count=$((fail_count + 1))
+  fi
+  if [[ -z "$res_name" || -z "$res_ns" ]]; then
+    echo "  FAIL: missing kubernetes-resource-name/-namespace"
+    fail_count=$((fail_count + 1))
+  else
+    echo "  A2A: /agents/$res_ns/$res_name"
+  fi
 done < <(echo "$entities" | jq -r '.[].metadata.name')
 
 echo
 if [[ $fail_count -eq 0 ]]; then
-  echo "All $count agent(s) conform to v1 contract."
+  echo "All $count agent(s) were ingested from kagent 1.0 Agents."
   exit 0
 else
   echo "$fail_count failure(s) across $count agent(s)."

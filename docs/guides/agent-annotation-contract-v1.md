@@ -1,5 +1,13 @@
 # Agent Annotation Contract — v1
 
+> **Removed.** The `agents.platform.ai/*` annotations were deleted from the
+> Agent manifests in `arigsela/kubernetes` on 2026-07-14, and kagent 1.0 has
+> no per-agent Service for an `a2a-endpoint` to name. The portal no longer
+> reads them: `kagent-shared/resolver.ts` resolves an agent through its
+> catalog entity (ingested from the `api.kagent.dev` Agent) to the kagent
+> controller's A2A gateway, `<kagent.a2aBaseUrl>/agents/<namespace>/<name>`.
+> Kept for history only.
+
 > Companion to the kagent-agent scaffolder template. Documents the
 > `agents.platform.ai/*` annotations that every IDP-managed kagent
 > Agent carries in both its K8s CRD and its Backstage catalog entity.

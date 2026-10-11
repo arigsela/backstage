@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { Button, Grid } from '@material-ui/core';
 import {
   EntityApiDefinitionCard,
@@ -28,7 +27,6 @@ import {
   hasRelationWarnings,
   EntityRelationWarning,
 } from '@backstage/plugin-catalog';
-import { useEntity } from '@backstage/plugin-catalog-react';
 import {
   EntityUserProfileCard,
   EntityGroupProfileCard,
@@ -36,17 +34,12 @@ import {
   EntityOwnershipCard,
 } from '@backstage/plugin-org';
 import { EntityTechdocsContent } from '@backstage/plugin-techdocs';
-import {
-  EmptyState,
-  InfoCard,
-  MarkdownContent,
-} from '@backstage/core-components';
+import { EmptyState } from '@backstage/core-components';
 import {
   Direction,
   EntityCatalogGraphCard,
 } from '@backstage/plugin-catalog-graph';
 import {
-  Entity,
   RELATION_API_CONSUMED_BY,
   RELATION_API_PROVIDED_BY,
   RELATION_CONSUMES_API,
@@ -63,9 +56,7 @@ import { ReportIssue } from '@backstage/plugin-techdocs-module-addons-contrib';
 import {
   EntityKubernetesContent,
   isKubernetesAvailable,
-  kubernetesApiRef,
 } from '@backstage/plugin-kubernetes';
-import { useApi } from '@backstage/core-plugin-api';
 
 import {
   CrossplaneResourceGraphSelector,
@@ -74,6 +65,8 @@ import {
   IfCrossplaneResourcesListAvailable,
   isCrossplaneAvailable,
 } from '@terasky/backstage-plugin-crossplane-resources-frontend';
+
+import { isKagentAgent, KagentAboutCardContent } from './KagentAgentCard';
 
 // Container CVE surfacing: Overview card + Security tab content. Both call
 // useCveReport() internally and take no props — see packages/app/src/components/cve.
@@ -87,237 +80,7 @@ const techdocsContent = (
   </EntityTechdocsContent>
 );
 
-// =============================================================================
-// Kagent IDP v1.7 — "About this agent" card
-// =============================================================================
-// Renders a Markdown summary of a kagent.dev/v1alpha2 Agent on the entity
-// Overview tab. Fetches the live Agent CRD via the Backstage Kubernetes plugin
-// proxy (the annotation-based approach was abandoned — kagent controller drops
-// multi-line annotations during Deployment creation, breaking the propagation
-// chain to TeraSky's kubernetes-ingestor).
-//
-// Companion spec: arigsela/kubernetes:docs/superpowers/specs/2026-05-18-kagent-idp-v1.7-design.md
-
-const isKagentAgent = (entity: Entity): boolean =>
-  entity?.spec?.type === 'kagent-agent';
-
-interface KagentSkill {
-  id: string;
-  name: string;
-  description: string;
-  examples?: string[];
-  tags?: string[];
-}
-
-interface KagentAgentSpec {
-  description?: string;
-  declarative?: {
-    modelConfig?: string;
-    memory?: { modelConfig?: string };
-    systemMessage?: string;
-    a2aConfig?: { skills?: KagentSkill[] };
-    tools?: Array<{ type: string; agent?: { name: string } }>;
-    context?: {
-      compaction?: { compactionInterval?: number; overlapSize?: number };
-    };
-    deployment?: {
-      resources?: {
-        requests?: { cpu?: string; memory?: string };
-        limits?: { cpu?: string; memory?: string };
-      };
-    };
-    promptTemplate?: unknown;
-  };
-}
-
-const DELEGATE_DESCRIPTIONS: Record<string, string> = {
-  'k8s-agent':
-    'Kubernetes cluster operations (pods, deployments, RBAC, troubleshooting)',
-  'helm-agent':
-    'Helm release lifecycle (install/upgrade/rollback, chart inspection)',
-  'istio-agent': 'Istio service-mesh configuration and traffic management',
-  'kgateway-agent': 'Kubernetes Gateway API (kgateway/Envoy)',
-  'argo-rollouts-conversion-agent':
-    'Convert Deployments to Argo Rollouts for progressive delivery',
-  'observability-agent':
-    'Prometheus + Grafana metrics and dashboard management',
-};
-
-const buildKagentMarkdown = (
-  entityName: string,
-  spec: KagentAgentSpec,
-): string => {
-  const decl = spec.declarative || {};
-  const skills = decl.a2aConfig?.skills || [];
-  const delegates = (decl.tools || [])
-    .filter(t => t.type === 'Agent' && t.agent?.name)
-    .map(t => t.agent!.name);
-  const compaction = decl.context?.compaction;
-  const resources = decl.deployment?.resources;
-
-  const lines: string[] = [`# ${entityName}`, ''];
-  if (spec.description) lines.push(spec.description, '');
-  lines.push(
-    '## Purpose',
-    '',
-    decl.systemMessage || '(no system message defined)',
-  );
-
-  if (skills.length > 0) {
-    lines.push('', '## Skills');
-    for (const skill of skills) {
-      lines.push(
-        '',
-        `### ${skill.name} (\`${skill.id}\`)`,
-        '',
-        skill.description,
-      );
-      if (skill.examples?.length) {
-        lines.push('', '**Examples:**');
-        for (const ex of skill.examples) lines.push(`- ${ex}`);
-      }
-      if (skill.tags?.length) {
-        lines.push(
-          '',
-          `**Tags:** ${skill.tags.map(t => `\`${t}\``).join(', ')}`,
-        );
-      }
-    }
-  }
-
-  if (delegates.length > 0) {
-    lines.push(
-      '',
-      '## Delegates to',
-      '',
-      'This agent can delegate tasks to the following agents:',
-    );
-    for (const d of delegates) {
-      lines.push(
-        `- **${d}** — ${DELEGATE_DESCRIPTIONS[d] || '(see kagent docs)'}`,
-      );
-    }
-  }
-
-  lines.push('', '## Configuration', '', '| Setting | Value |', '|---|---|');
-  if (decl.modelConfig) lines.push(`| Model | \`${decl.modelConfig}\` |`);
-  if (decl.memory?.modelConfig)
-    lines.push(`| Memory model | \`${decl.memory.modelConfig}\` |`);
-  if (compaction) {
-    lines.push(
-      `| Compaction interval | ${compaction.compactionInterval} turns |`,
-      `| Compaction overlap | ${compaction.overlapSize} turns |`,
-    );
-  }
-  if (resources) {
-    lines.push(
-      `| CPU | ${resources.requests?.cpu || '?'} / ${
-        resources.limits?.cpu || '?'
-      } (req/lim) |`,
-      `| Memory | ${resources.requests?.memory || '?'} / ${
-        resources.limits?.memory || '?'
-      } (req/lim) |`,
-    );
-  }
-  lines.push(
-    `| Built-in prompts | ${
-      decl.promptTemplate ? 'included' : 'not included'
-    } |`,
-  );
-
-  lines.push(
-    '',
-    '## Manage',
-    '',
-    `- **Edit:** hand-edit \`base-apps/kagent/agents/${entityName}.yaml\` and open a PR`,
-    `- **Decommission:** use the **Decommission Kagent Agent** template in Backstage`,
-  );
-
-  return lines.join('\n');
-};
-
-const KagentAboutCardContent = () => {
-  const { entity } = useEntity();
-  const kubernetesApi = useApi(kubernetesApiRef);
-  const [spec, setSpec] = useState<KagentAgentSpec | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // TeraSky's kubernetes-resource-* annotations point at the Deployment
-    // workload (apps/v1), not the Agent CRD itself. Our IDP convention is
-    // Agent name == Deployment name == entity name, both in the kagent
-    // namespace, so we use those values and hardcode the kagent API path.
-    const ann = entity.metadata.annotations || {};
-    const name =
-      ann['terasky.backstage.io/kubernetes-resource-name'] ||
-      entity.metadata.name;
-    const namespace =
-      ann['terasky.backstage.io/kubernetes-resource-namespace'] || 'kagent';
-
-    if (!name || !namespace) {
-      setError(
-        'Unable to determine the Agent CRD name/namespace from the entity',
-      );
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    kubernetesApi
-      .proxy({
-        clusterName: 'homelab',
-        path: `/apis/kagent.dev/v1alpha2/namespaces/${namespace}/agents/${name}`,
-      })
-      .then(res => {
-        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-        return res.json();
-      })
-      .then((data: { spec?: KagentAgentSpec }) => {
-        if (cancelled) return;
-        setSpec(data.spec || {});
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : String(err));
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [entity, kubernetesApi]);
-
-  if (loading) {
-    return (
-      <Grid item xs={12}>
-        <InfoCard title="About this agent">
-          <em>Loading agent details from cluster…</em>
-        </InfoCard>
-      </Grid>
-    );
-  }
-  if (error || !spec) {
-    return (
-      <Grid item xs={12}>
-        <InfoCard title="About this agent">
-          <em>Could not load agent details: {error || 'unknown error'}</em>
-        </InfoCard>
-      </Grid>
-    );
-  }
-
-  return (
-    <Grid item xs={12}>
-      <InfoCard title="About this agent">
-        <MarkdownContent
-          content={buildKagentMarkdown(entity.metadata.name, spec)}
-        />
-      </InfoCard>
-    </Grid>
-  );
-};
-
+// kagent 1.0 "About this agent" card — see ./KagentAgentCard.tsx.
 const kagentAboutCard = (
   <EntitySwitch>
     <EntitySwitch.Case if={isKagentAgent}>
@@ -437,14 +200,14 @@ const securityRoute = (
   </EntityLayout.Route>
 );
 
-// kagent IDP v1.8: dedicated 4-tab layout (Overview / Kubernetes / Security /
-// Docs) for entities with spec.type='kagent-agent'. The Kubernetes tab shows
-// the kagent-controller-spawned workload (Pod/Deployment/Service) plus
-// the Agent CRD itself in the Custom Resources panel (configured via
-// kubernetes.customResources in app-config). The Security tab was added for
-// container CVE surfacing: two of the six images in the estate with
-// actionable findings are kagent agents, so this layout needs it as much as
-// serviceEntityPage and websiteEntityPage do.
+// kagent: dedicated 4-tab layout (Overview / Kubernetes / Security / Docs) for
+// entities with spec.type='kagent-agent'. Since kagent 1.0 the entity is
+// ingested from the api.kagent.dev Agent itself and there is no per-agent
+// Deployment, so the Kubernetes and Security tabs only appear when the Agent
+// carries a terasky.backstage.io/kubernetes-label-selector annotation (the
+// ingestor computes no selector for custom kinds); the Kubernetes tab then
+// lists the matching Agent/AgentTemplate in its Custom Resources panel
+// (kubernetes.customResources in app-config).
 const kagentAgentPage = (
   <EntityLayout>
     <EntityLayout.Route path="/" title="Overview">
