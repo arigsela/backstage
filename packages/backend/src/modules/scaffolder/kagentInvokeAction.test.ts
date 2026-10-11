@@ -7,6 +7,11 @@
  *   - durationMs emission
  */
 import { createKagentInvokeAction } from './kagentInvokeAction';
+import {
+  a2aResponse,
+  agentEntity,
+  completedTask,
+} from '../kagent-shared/__fixtures__/a2a';
 
 function mockDiscovery(catalogBase = 'http://localhost:7007/api/catalog') {
   return {
@@ -37,58 +42,6 @@ function createMockActionContext(opts: {
   } as any;
 }
 
-function buildEntity() {
-  return {
-    apiVersion: 'backstage.io/v1alpha1',
-    kind: 'Component',
-    metadata: {
-      name: 'foo-agent',
-      namespace: 'default',
-      annotations: {
-        'agents.platform.ai/version': 'v1',
-        'agents.platform.ai/runtime': 'kagent',
-        'agents.platform.ai/a2a-endpoint':
-          'http://foo-agent.kagent.svc.cluster.local:8080',
-      },
-    },
-    spec: { type: 'kagent-agent' },
-  };
-}
-
-function mockCatalogResponse(body: any, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-    text: async () => JSON.stringify(body),
-  } as any;
-}
-
-function mockA2ASuccess(text: string) {
-  return {
-    ok: true,
-    status: 200,
-    json: async () => ({
-      jsonrpc: '2.0',
-      id: 'test',
-      result: {
-        kind: 'task',
-        artifacts: [{ artifactId: 'a', parts: [{ kind: 'text', text }] }],
-        status: { state: 'completed' },
-      },
-    }),
-  } as any;
-}
-
-function mockA2AHttp500() {
-  return {
-    ok: false,
-    status: 500,
-    json: async () => ({}),
-    text: async () => 'err',
-  } as any;
-}
-
 describe('kagent:agent:invoke — orchestration', () => {
   let fetchSpy: jest.SpyInstance;
 
@@ -102,8 +55,10 @@ describe('kagent:agent:invoke — orchestration', () => {
 
   it('expectJson: true — parses JSON response', async () => {
     fetchSpy
-      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
-      .mockResolvedValueOnce(mockA2ASuccess('{"foo": "bar", "n": 42}'));
+      .mockResolvedValueOnce(a2aResponse(agentEntity()))
+      .mockResolvedValueOnce(
+        a2aResponse(completedTask('{"foo": "bar", "n": 42}')),
+      );
 
     const action = createKagentInvokeAction({ discovery: mockDiscovery() });
     const ctx = createMockActionContext({
@@ -117,26 +72,23 @@ describe('kagent:agent:invoke — orchestration', () => {
 
   it('expectJson: true on bad JSON — INVALID_RESPONSE_JSON', async () => {
     fetchSpy
-      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
-      .mockResolvedValueOnce(mockA2ASuccess('not json'));
+      .mockResolvedValueOnce(a2aResponse(agentEntity()))
+      .mockResolvedValueOnce(a2aResponse(completedTask('not json')));
 
     const action = createKagentInvokeAction({ discovery: mockDiscovery() });
     const ctx = createMockActionContext({
       input: { name: 'foo-agent', prompt: 'hi', expectJson: true },
     });
 
-    try {
-      await action.handler(ctx);
-      fail('expected throw');
-    } catch (e: any) {
-      expect(e.code).toBe('INVALID_RESPONSE_JSON');
-    }
+    await expect(action.handler(ctx)).rejects.toMatchObject({
+      code: 'INVALID_RESPONSE_JSON',
+    });
   });
 
   it('onError: continue — returns error in output instead of throwing', async () => {
     fetchSpy
-      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
-      .mockResolvedValueOnce(mockA2AHttp500());
+      .mockResolvedValueOnce(a2aResponse(agentEntity()))
+      .mockResolvedValueOnce(a2aResponse({}, 500));
 
     const action = createKagentInvokeAction({ discovery: mockDiscovery() });
     const ctx = createMockActionContext({
@@ -154,8 +106,8 @@ describe('kagent:agent:invoke — orchestration', () => {
 
   it('durationMs is set to a non-negative number', async () => {
     fetchSpy
-      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
-      .mockResolvedValueOnce(mockA2ASuccess('done'));
+      .mockResolvedValueOnce(a2aResponse(agentEntity()))
+      .mockResolvedValueOnce(a2aResponse(completedTask('done')));
 
     const action = createKagentInvokeAction({ discovery: mockDiscovery() });
     const ctx = createMockActionContext({

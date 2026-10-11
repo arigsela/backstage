@@ -389,16 +389,38 @@ kubernetes:
           authProvider: 'serviceAccount'                 # Use ServiceAccount token (production / in-cluster)
           skipTLSVerify: true                            # Skip TLS verification (self-signed certs in homelab)
           serviceAccountToken: ${K8S_SERVICE_ACCOUNT_TOKEN}  # Token injected via K8s Secret
-  # CUSTOM RESOURCES (v1.8):
+  # CUSTOM RESOURCES:
   # Declares non-standard k8s kinds the plugin should fetch for entity-page
   # Kubernetes tabs. Used by the kagent-agent entity page to show the live
-  # Agent CRD alongside its workload (Pod/Deployment/Service).
+  # kagent 1.0 Agent and AgentTemplate (api.kagent.dev/v1alpha3). They are
+  # listed by the entity's label selector, so they only appear for Agents that
+  # carry a terasky.backstage.io/kubernetes-label-selector annotation.
+  # Every entry is fetched for EVERY entity's Kubernetes tab, so each needs
+  # list RBAC (ClusterRole backstage-kagent-read in arigsela/kubernetes) and
+  # the CRD must exist — this targets kagent 1.0 and must not ship before it.
   # NOTE: this block must be mirrored in app-config.production.yaml because
   # Backstage merges objects but REPLACES arrays (v1.6 lesson).
   customResources:
-    - group: 'kagent.dev'
-      apiVersion: 'v1alpha2'
+    - group: 'api.kagent.dev'
+      apiVersion: 'v1alpha3'
       plural: 'agents'
+    - group: 'api.kagent.dev'
+      apiVersion: 'v1alpha3'
+      plural: 'agenttemplates'
+
+# --- KAGENT (A2A) ---
+# Where the kagent-suggest route and the kagent:agent:invoke scaffolder action
+# send A2A calls. kagent 1.0 has no per-agent Service: the controller's A2A
+# gateway serves every Agent at <a2aBaseUrl>/agents/<namespace>/<name>
+# (A2A v1 JSON-RPC, SendMessage). The gateway is unauthenticated in kagent's
+# default `insecure` auth mode and takes the caller's identity from the
+# X-User-Id header; a2aUserId is what the portal sends (it owns the Sessions
+# the portal creates). Both keys are optional — these are the defaults.
+# For local dev: kubectl port-forward -n kagent svc/kagent-controller 8083 and
+# set a2aBaseUrl: http://127.0.0.1:8083 in app-config.local.yaml.
+kagent:
+  a2aBaseUrl: http://kagent-controller.kagent.svc.cluster.local:8083
+  a2aUserId: backstage-portal
 
 # --- CONTAINER CVE REPORTS ---
 # Points the `cve` backend plugin at the S3 bucket where the weekly Trivy
@@ -458,6 +480,20 @@ kubernetesIngestor:
       - kube-system
       - kube-public
       - kube-node-lease
+    # Extra kinds scanned IN ADDITION to the default workloads (Deployment,
+    # StatefulSet, DaemonSet, CronJob), subject to the same add-to-catalog
+    # opt-in above. kagent 1.0 Agents have no per-agent Deployment, so the
+    # Agent itself is ingested: it carries terasky.backstage.io/add-to-catalog
+    # and component-type: kagent-agent, and becomes component:default/<name>
+    # with the ingestor's kubernetes-resource-{kind,name,namespace} annotations
+    # pointing at the Agent (the kagent-shared resolver and the entity-page
+    # card rely on those). defaultType applies only if component-type is unset.
+    # The ingestor skips a kind whose CRD is absent (logged at debug).
+    customWorkloadTypes:
+      - group: api.kagent.dev
+        apiVersion: v1alpha3
+        plural: agents
+        defaultType: kagent-agent
   crossplane:
     enabled: true
     claims:

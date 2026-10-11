@@ -47,15 +47,15 @@ export interface KagentSuggestFieldProps {
 
 const ERROR_MESSAGES: Record<string, string> = {
   AGENT_NOT_FOUND:
-    'Agent is not in the catalog yet. Ask an operator to scaffold it before trying again.',
+    'Agent is not in the catalog yet. Ask an operator to add it to the catalog, then try again.',
   INVALID_CONTRACT:
-    'Agent is missing the v1 annotation contract. Re-scaffold it through the IDP wizard.',
+    'The catalog entry is not a kagent 1.0 Agent. Check the Agent carries the terasky.backstage.io catalog annotations.',
   ENDPOINT_UNREACHABLE:
-    "Couldn't reach the agent service. Is the kagent namespace up?",
+    "Couldn't reach the kagent controller. Is the kagent namespace up?",
   INVOCATION_TIMEOUT:
     "The agent didn't respond in time. Try simplifying the prompt or retrying.",
   AGENT_ERROR:
-    "The agent returned an error. Check the agent's pod logs.",
+    'The agent returned an error. Check the kagent controller logs and the Session in the kagent UI.',
   INVALID_RESPONSE_JSON:
     "The agent didn't return valid JSON. Either ask the operator to tune the agent's system message, or contact platform-eng.",
   BAD_INPUT:

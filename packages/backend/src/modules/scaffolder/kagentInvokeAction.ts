@@ -7,6 +7,10 @@
  * validation). The shared library is the single source of truth for the
  * wire format and contract validation.
  *
+ * kagent 1.0: the agent is reached through the kagent controller's A2A
+ * gateway (`POST <controller>/agents/<namespace>/<name>`, A2A v1
+ * `SendMessage`); each call starts a new kagent Session.
+ *
  * IMPORTANT: agent responses are untrusted text. Templates that interpolate
  * the response into shell commands, file paths, or anything executable MUST
  * treat it as adversarial input.
@@ -18,6 +22,7 @@ import { createTemplateAction } from '@backstage/plugin-scaffolder-node';
 import type { DiscoveryService } from '@backstage/backend-plugin-api';
 import {
   AgentInvocationError,
+  type KagentA2AConfig,
   invokeAgent,
   resolveAgent,
   validateInvokeInput,
@@ -27,8 +32,11 @@ import {
 // continue to work.
 export { AgentInvocationError };
 
-export function createKagentInvokeAction(opts: { discovery: DiscoveryService }) {
-  const { discovery } = opts;
+export function createKagentInvokeAction(opts: {
+  discovery: DiscoveryService;
+  a2a?: KagentA2AConfig;
+}) {
+  const { discovery, a2a = {} } = opts;
 
   return createTemplateAction({
     id: 'kagent:agent:invoke',
@@ -74,7 +82,10 @@ export function createKagentInvokeAction(opts: { discovery: DiscoveryService }) 
             .union([z.string(), z.unknown()])
             .describe('The agent text response, or parsed JSON when expectJson:true.'),
         agentName: z => z.string().describe('Echoed input.'),
-        runtime: z => z.string().describe('From agents.platform.ai/runtime annotation.'),
+        runtime: z =>
+          z
+            .string()
+            .describe("Always 'kagent' (agents are reached through the kagent controller's A2A gateway)."),
         durationMs: z => z.number().int().describe('Wall-clock duration in ms.'),
         error: z =>
           z
@@ -92,11 +103,13 @@ export function createKagentInvokeAction(opts: { discovery: DiscoveryService }) 
       const startedAt = Date.now();
 
       try {
-        const info = await resolveAgent(discovery, inputs.name, ctx.logger);
+        const info = await resolveAgent(discovery, inputs.name, ctx.logger, {
+          a2aBaseUrl: a2a.a2aBaseUrl,
+        });
         const text = await invokeAgent(
           info.endpoint,
           inputs.prompt,
-          { timeoutMs, stepId: ctx.task?.id ?? 'unknown' },
+          { timeoutMs, stepId: ctx.task?.id ?? 'unknown', userId: a2a.userId },
           ctx.logger,
         );
 

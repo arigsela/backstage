@@ -16,13 +16,37 @@ content for a PR body.
 ## Pre-requisites
 
 - The target agent exists in the catalog as `Component` with
-  `spec.type: kagent-agent` (auto-ingested by TeraSky's
-  kubernetes-ingestor from a `kagent.dev/v1alpha2` Agent CRD).
-- The agent carries the `agents.platform.ai/*` v1 contract annotations
-  (every IDP-scaffolded agent does — see
-  `docs/guides/agent-annotation-contract-v1.md`).
-- Backstage is running in-cluster (the action calls the agent at its
-  `*.kagent.svc.cluster.local` Service URL).
+  `spec.type: kagent-agent`, ingested by TeraSky's kubernetes-ingestor
+  directly from a kagent 1.0 `api.kagent.dev/v1alpha3` Agent (the Agent
+  carries `terasky.backstage.io/add-to-catalog: "true"` and
+  `terasky.backstage.io/component-type: kagent-agent`; see
+  `kubernetesIngestor.components.customWorkloadTypes` in `app-config.yaml`).
+- Backstage can reach the kagent controller. The action resolves the agent
+  through the catalog, then calls the controller's A2A gateway at
+  `<kagent.a2aBaseUrl>/agents/<namespace>/<name>` (default
+  `http://kagent-controller.kagent.svc.cluster.local:8083`).
+
+## Wire format (kagent 1.0)
+
+A2A v1 JSON-RPC, verified against kagent `v1.0.0-alpha11`
+(`docs/architecture/a2a-transports.md`) and the a2a-go v2.6.0 encoding:
+
+```json
+POST /agents/kagent/skill-suggester
+A2A-Version: 1.0
+X-User-Id: backstage-portal
+
+{"jsonrpc": "2.0", "id": "<task id>", "method": "SendMessage",
+ "params": {"message": {"messageId": "<uuid>", "role": "ROLE_USER",
+                        "parts": [{"text": "..."}]}}}
+```
+
+The reply is `result.task` (`status.state` is `TASK_STATE_*`; the answer is
+the text parts of `status.message` and `artifacts[]`, while `data` parts are
+tool calls and are skipped) or `result.message`. No `contextId` is sent, so
+every call is a new kagent Session owned by the `X-User-Id` user. A JSON-RPC
+`-32004` whose ErrorInfo `metadata.reason` is `KAGENT_SEND_NOT_ACCEPTED` is
+retried with the same message for up to 30 s; nothing else is.
 
 ## Action contract
 
@@ -98,19 +122,15 @@ content for a PR body.
 | Error code | Likely cause | Fix |
 | --- | --- | --- |
 | `AGENT_NOT_FOUND` | Catalog hasn't ingested the agent yet, or wrong name | Wait ~30s after creating the agent; confirm `kubectl get agents.kagent.dev -n kagent` shows it; check the spelling of `name` in the action input. |
-| `INVALID_CONTRACT: Unsupported contract version: v2` | The agent was scaffolded with a future v2 contract | Upgrade Backstage to support v2 (not yet implemented). |
-| `INVALID_CONTRACT: Unsupported runtime: <other>` | Trying to invoke a non-kagent agent | This action is kagent-specific. Use a sibling `<runtime>:agent:invoke` action when one exists. |
-| `ENDPOINT_UNREACHABLE` | Backstage is running outside the cluster (e.g., local dev), or the agent's Service is down | Run inside the cluster, or port-forward and override the annotation for local testing. |
+| `INVALID_CONTRACT: ... not a kagent 1.0 Agent` | The entity was ingested from something other than an `api.kagent.dev` Agent (e.g. a stale kagent 0.10 Deployment entity) | Check `kubectl get agents.api.kagent.dev -n kagent`; the entity's `terasky.backstage.io/kubernetes-resource-kind` must be `Agent`. |
+| `ENDPOINT_UNREACHABLE` | Backstage is running outside the cluster (e.g., local dev), or the kagent controller is down | Run inside the cluster, or `kubectl port-forward -n kagent svc/kagent-controller 8083` and set `kagent.a2aBaseUrl: http://127.0.0.1:8083` in `app-config.local.yaml`. |
 | `INVOCATION_TIMEOUT` | Agent is slow; default 120s wasn't enough | Increase `timeoutMs` (max 300000) or simplify the prompt. |
-| `AGENT_ERROR` | Agent returned HTTP 4xx/5xx or a JSON-RPC error | Check the agent's pod logs: `kubectl logs -n kagent deploy/<name>` |
+| `AGENT_ERROR` | HTTP 4xx/5xx, a JSON-RPC error, or a task that failed or paused for an approval | The message carries the task state and status text. Check `kubectl logs -n kagent deploy/kagent-controller` and the Session (owned by `backstage-portal`) in the kagent UI. |
 | `INVALID_RESPONSE_JSON` | `expectJson: true` but the agent's text wasn't valid JSON | Tighten the prompt ("Respond with valid JSON, nothing else."), or set `expectJson: false` and parse downstream. |
 
 ## Forward compatibility
 
-- A v2 contract will add fields like `system-message-digest` and
-  `disciplines`. The action will accept v2 annotations as soon as
-  Backstage is updated. v1 entities keep working.
-- A `crewai:agent:invoke` sibling action will live alongside this one
-  when CrewAI agents need the same treatment.
-- Streaming responses (`message/stream`) are not exposed in v1. They'll
+- Streaming responses (`SendStreamingMessage`) are not exposed. They'll
   arrive when a custom UI field needs them.
+- Multi-turn use (sending the returned `contextId` back) is not exposed;
+  each invocation is a fresh Session.

@@ -140,6 +140,12 @@ kubernetesIngestor:
       - kube-system
       - kube-public
       - kube-node-lease
+    # kagent 1.0 Agents (see the comment in app-config.yaml).
+    customWorkloadTypes:
+      - group: api.kagent.dev
+        apiVersion: v1alpha3
+        plural: agents
+        defaultType: kagent-agent
   crossplane:
     enabled: true
     claims:
@@ -153,14 +159,18 @@ kubernetesIngestor:
 crossplane:
   enablePermissions: true
 
-# --- KUBERNETES (v1.8) ---
-# Mirror of the customResources entry from app-config.yaml so the kagent.dev
-# Agent CRD is fetched for entity-page Kubernetes tabs. Backstage's config
-# layering MERGES objects but REPLACES arrays — and we want this entry
-# present regardless of which config layer wins. (v1.6 lesson — same pattern
-# as catalog.locations and kubernetesIngestor.)
+# --- KUBERNETES ---
+# Mirror of the customResources entries from app-config.yaml so the kagent 1.0
+# Agent and AgentTemplate (api.kagent.dev/v1alpha3) are fetched for
+# entity-page Kubernetes tabs. Backstage's config layering MERGES objects but
+# REPLACES arrays — and we want these entries present regardless of which
+# config layer wins. (v1.6 lesson — same pattern as catalog.locations and
+# kubernetesIngestor.)
 kubernetes:
   customResources:
-    - group: 'kagent.dev'
-      apiVersion: 'v1alpha2'
+    - group: 'api.kagent.dev'
+      apiVersion: 'v1alpha3'
       plural: 'agents'
+    - group: 'api.kagent.dev'
+      apiVersion: 'v1alpha3'
+      plural: 'agenttemplates'

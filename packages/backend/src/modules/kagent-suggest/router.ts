@@ -15,6 +15,7 @@ import express, { Router } from 'express';
 import type { DiscoveryService, LoggerService } from '@backstage/backend-plugin-api';
 import {
   AgentInvocationError,
+  type KagentA2AConfig,
   invokeAgent,
   resolveAgent,
   tolerantParseJson,
@@ -26,8 +27,9 @@ const MAX_TIMEOUT_MS = 120_000;
 export async function createRouter(opts: {
   discovery: DiscoveryService;
   logger: LoggerService;
+  a2a?: KagentA2AConfig;
 }): Promise<Router> {
-  const { discovery, logger } = opts;
+  const { discovery, logger, a2a = {} } = opts;
   const router = Router();
 
   // Explicit JSON body parser. Backstage's httpRouter normally provides one
@@ -71,11 +73,17 @@ export async function createRouter(opts: {
     const expectJson = inputs.expectJson ?? false;
 
     try {
-      const info = await resolveAgent(discovery, inputs.name, logger);
+      const info = await resolveAgent(discovery, inputs.name, logger, {
+        a2aBaseUrl: a2a.a2aBaseUrl,
+      });
       const text = await invokeAgent(
         info.endpoint,
         inputs.prompt,
-        { timeoutMs, stepId: `kagent-suggest-${Date.now()}` },
+        {
+          timeoutMs,
+          stepId: `kagent-suggest-${Date.now()}`,
+          userId: a2a.userId,
+        },
         logger,
       );
 

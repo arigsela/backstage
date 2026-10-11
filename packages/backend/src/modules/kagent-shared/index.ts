@@ -1,8 +1,10 @@
 export { AgentInvocationError } from './errors';
-export { resolveAgent } from './resolver';
+export { resolveAgent, DEFAULT_A2A_BASE_URL } from './resolver';
 export type { EndpointInfo } from './resolver';
-export { invokeAgent } from './invoker';
+export { invokeAgent, DEFAULT_A2A_USER_ID } from './invoker';
 export type { InvokeOptions } from './invoker';
+export { readKagentA2AConfig } from './config';
+export type { KagentA2AConfig } from './config';
 export { validateInvokeInput } from './validation';
 export type { ValidatedInput } from './validation';
 export { tolerantParseJson } from './jsonParse';

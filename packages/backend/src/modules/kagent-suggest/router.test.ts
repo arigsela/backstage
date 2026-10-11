@@ -8,6 +8,11 @@ import express from 'express';
 import request from 'supertest';
 
 import { createRouter } from './router';
+import {
+  a2aResponse,
+  agentEntity,
+  completedTask,
+} from '../kagent-shared/__fixtures__/a2a';
 
 function mockDiscovery(catalogBase = 'http://localhost:7007/api/catalog') {
   return {
@@ -16,60 +21,18 @@ function mockDiscovery(catalogBase = 'http://localhost:7007/api/catalog') {
   } as any;
 }
 
-function buildEntity() {
-  return {
-    apiVersion: 'backstage.io/v1alpha1',
-    kind: 'Component',
-    metadata: {
-      name: 'foo-agent',
-      namespace: 'default',
-      annotations: {
-        'agents.platform.ai/version': 'v1',
-        'agents.platform.ai/runtime': 'kagent',
-        'agents.platform.ai/a2a-endpoint':
-          'http://foo-agent.kagent.svc.cluster.local:8080',
-      },
-    },
-    spec: { type: 'kagent-agent' },
-  };
-}
-
-function mockCatalogResponse(body: any, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-    text: async () => JSON.stringify(body),
-  } as any;
-}
-
-function mockA2ASuccess(text: string) {
-  return {
-    ok: true,
-    status: 200,
-    json: async () => ({
-      jsonrpc: '2.0',
-      id: 'test',
-      result: {
-        kind: 'task',
-        artifacts: [{ artifactId: 'a', parts: [{ kind: 'text', text }] }],
-        status: { state: 'completed' },
-      },
-    }),
-  } as any;
-}
-
-async function buildApp() {
+async function buildApp(a2a?: { a2aBaseUrl?: string; userId?: string }) {
   const app = express();
   app.use(express.json());
   const router = await createRouter({
     discovery: mockDiscovery(),
+    a2a,
     logger: {
       info: jest.fn(),
       warn: jest.fn(),
       error: jest.fn(),
       debug: jest.fn(),
-      child: function () {
+      child() {
         return this;
       },
     } as any,
@@ -91,8 +54,8 @@ describe('kagent-suggest router', () => {
 
   it('happy path — returns ok:true with response, agentName, runtime, durationMs', async () => {
     fetchSpy
-      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
-      .mockResolvedValueOnce(mockA2ASuccess('Hello.'));
+      .mockResolvedValueOnce(a2aResponse(agentEntity()))
+      .mockResolvedValueOnce(a2aResponse(completedTask('Hello.')));
 
     const app = await buildApp();
     const res = await request(app)
@@ -108,10 +71,27 @@ describe('kagent-suggest router', () => {
     expect(res.body.durationMs).toBeGreaterThanOrEqual(0);
   });
 
+  it('calls the configured kagent controller gateway as the configured user', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(a2aResponse(agentEntity()))
+      .mockResolvedValueOnce(a2aResponse(completedTask('ok')));
+
+    const app = await buildApp({ a2aBaseUrl: 'http://kagent.test:8083', userId: 'tester' });
+    const res = await request(app)
+      .post('/api/kagent-suggest/invoke')
+      .send({ agentName: 'foo-agent', prompt: 'hi' });
+
+    expect(res.body.ok).toBe(true);
+    const [url, init] = fetchSpy.mock.calls[1];
+    expect(url).toBe('http://kagent.test:8083/agents/kagent/foo-agent');
+    expect(init.headers['X-User-Id']).toBe('tester');
+    expect(JSON.parse(init.body).method).toBe('SendMessage');
+  });
+
   it('expectJson: true — parses JSON response', async () => {
     fetchSpy
-      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
-      .mockResolvedValueOnce(mockA2ASuccess('[{"id":"a","name":"A","description":"x"}]'));
+      .mockResolvedValueOnce(a2aResponse(agentEntity()))
+      .mockResolvedValueOnce(a2aResponse(completedTask('[{"id":"a","name":"A","description":"x"}]')));
 
     const app = await buildApp();
     const res = await request(app)
@@ -156,7 +136,7 @@ describe('kagent-suggest router', () => {
   });
 
   it('AGENT_NOT_FOUND surfaces from resolver', async () => {
-    fetchSpy.mockResolvedValueOnce(mockCatalogResponse({}, 404));
+    fetchSpy.mockResolvedValueOnce(a2aResponse({}, 404));
 
     const app = await buildApp();
     const res = await request(app)
@@ -171,8 +151,8 @@ describe('kagent-suggest router', () => {
 
   it('INVALID_RESPONSE_JSON when expectJson is true and agent returns non-JSON', async () => {
     fetchSpy
-      .mockResolvedValueOnce(mockCatalogResponse(buildEntity()))
-      .mockResolvedValueOnce(mockA2ASuccess('not json'));
+      .mockResolvedValueOnce(a2aResponse(agentEntity()))
+      .mockResolvedValueOnce(a2aResponse(completedTask('not json')));
 
     const app = await buildApp();
     const res = await request(app)

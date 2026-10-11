@@ -12,10 +12,13 @@
  * - aws:ecr:build-push — Builds Docker images and pushes them to ECR (legacy)
  * - vault:setup — Creates Vault policy, K8s auth role, and placeholder secrets
  * - crossplane:teardown:open-decommission-pr — Opens a teardown PR for a v1.x IDP app
- * - kagent:agent:validate-name — Fails the wizard on kagent agent name collisions
  * - newapp:validate-name — Fails the wizard on base-apps/<name> collisions
- * - kagent:agent:open-decommission-pr — Opens a teardown PR for an IDP-managed kagent Agent
  * - kagent:agent:invoke — Synchronously calls a kagent.dev Agent via the A2A protocol
+ *
+ * kagent:agent:validate-name and kagent:agent:open-decommission-pr were removed
+ * at the kagent 1.0 move: no template has used them since the kagent-agent
+ * templates were deleted (commit 926fd35), and they hard-coded the 0.10
+ * one-file-per-agent layout (1.0 splits an agent into Agent + AgentTemplate).
  */
 
 import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
@@ -25,9 +28,8 @@ import { createEcrCreateAction } from './ecrCreateAction';
 import { createEcrBuildPushAction } from './ecrBuildPushAction';
 import { createVaultSetupAction } from './vaultSetupAction';
 import { createDecommissionPullRequestAction } from './decommissionPullRequestAction';
-import { createKagentValidateNameAction } from './kagentValidateNameAction';
-import { createKagentDecommissionAction } from './kagentDecommissionAction';
 import { createKagentInvokeAction } from './kagentInvokeAction';
+import { readKagentA2AConfig } from '../kagent-shared';
 import { createNewAppValidateNameAction } from './newAppValidateNameAction';
 
 
@@ -38,20 +40,20 @@ const scaffolderCustomActionsModule = createBackendModule({
     registerInit({
       deps: {
         scaffolderActions: scaffolderActionsExtensionPoint,
-        // kagent:agent:invoke uses discovery to find the local catalog API.
+        // kagent:agent:invoke uses discovery to find the local catalog API,
+        // and the optional `kagent:` config block for the controller URL.
         discovery: coreServices.discovery,
+        config: coreServices.rootConfig,
       },
-      async init({ scaffolderActions, discovery }) {
+      async init({ scaffolderActions, discovery, config }) {
         scaffolderActions.addActions(
           createPublishFileAction(),
           createEcrCreateAction(),
           createEcrBuildPushAction(),
           createVaultSetupAction(),
           createDecommissionPullRequestAction(),
-          createKagentValidateNameAction(),
           createNewAppValidateNameAction(),
-          createKagentDecommissionAction(),
-          createKagentInvokeAction({ discovery }),
+          createKagentInvokeAction({ discovery, a2a: readKagentA2AConfig(config) }),
         );
       },
     });

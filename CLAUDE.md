@@ -49,7 +49,7 @@ default branch is `main` and `origin/master` does not exist, so it exits with
 
 ```bash
 bash scripts/kagent-template/test-contract.sh     # Layer 1: offline template render + assert
-BACKSTAGE_URL=http://localhost:7007 bash scripts/check-agent-contract.sh   # Layer 3: live catalog
+BACKSTAGE_URL=http://localhost:7007 EXPECTED_AGENTS=7 bash scripts/check-agent-contract.sh   # Layer 3: agents ingested from kagent 1.0 Agents
 BACKSTAGE_URL=http://localhost:7007 bash scripts/check-cve-contract.sh    # Layer 3: CVE reports
 ```
 
@@ -88,8 +88,9 @@ de-facto architecture doc and are kept current.
 
 Custom scaffolder actions (all in `modules/scaffolder/`, each with a colocated
 `.test.ts`): `publish:file`, `aws:ecr:create`, `aws:ecr:build-push`, `vault:setup`,
-`crossplane:teardown:open-decommission-pr`, `kagent:agent:validate-name`,
-`kagent:agent:open-decommission-pr`, `kagent:agent:invoke`, `newapp:validate-name`.
+`crossplane:teardown:open-decommission-pr`, `kagent:agent:invoke`, `newapp:validate-name`.
+(`kagent:agent:validate-name` and `kagent:agent:open-decommission-pr` were removed at
+the kagent 1.0 move — no template had used them since `926fd35`.)
 
 Actions that talk to GitHub read `process.env.GITHUB_TOKEN` directly and hardcode
 `arigsela/kubernetes` as owner/repo. Tests mock `@octokit/rest` at the module level
@@ -98,28 +99,35 @@ canonical shape).
 
 ### The kagent integration (the non-obvious part)
 
-kagent Agents live as `kagent.dev/v1alpha2` CRDs in the `arigsela/kubernetes` repo
-and get into the catalog via TeraSky's `kubernetes-ingestor`, which copies
-`metadata.annotations` 1:1 onto a `kind: Component, spec.type: kagent-agent` entity.
+kagent 1.0 Agents live as `api.kagent.dev/v1alpha3` resources in the
+`arigsela/kubernetes` repo (`Agent` → `AgentTemplate` for model/prompt/tools, and a
+`Harness` for the runtime). There is **no per-agent Deployment or Service**: every
+agent is reached through the kagent controller's A2A gateway,
+`http://kagent-controller.kagent.svc.cluster.local:8083/agents/<namespace>/<name>`
+(`kagent.a2aBaseUrl` in `app-config.yaml`).
 
-**The `agents.platform.ai/*` v1 annotation contract is the seam** between the
-cluster and everything in this repo. Seven required annotations: `version`
-(must equal `"v1"`), `runtime`, `description`, `a2a-endpoint`, `skills` (JSON array),
-`delegates` (JSON array), `capabilities` (JSON object). Full spec:
-`docs/guides/agent-annotation-contract-v1.md`.
+Agents get into the catalog through TeraSky's `kubernetes-ingestor`, which ingests the
+Agent itself as a custom workload type (`kubernetesIngestor.components.customWorkloadTypes`).
+An Agent opts in with `terasky.backstage.io/add-to-catalog: "true"` and
+`terasky.backstage.io/component-type: kagent-agent`, and becomes
+`component:default/<name>`. The ingestor adds
+`terasky.backstage.io/kubernetes-resource-{kind,name,namespace,api-version}` — the
+seam everything below relies on. (The old `agents.platform.ai/*` annotation contract
+was deleted from the manifests on 2026-07-14; nothing reads it any more.)
 
-Consumers of the contract, all of which reject non-conformant entities:
-
-- `kagent-shared/resolver.ts` — resolves an agent name → A2A endpoint by querying
-  the *local* catalog API via `coreServices.discovery` (no second K8s hop)
-- `kagent-shared/invoker.ts` — A2A JSON-RPC `message/send`. Wire format is pinned by
-  live probing, not by a published schema: `params.message.messageId` is **required**
-  (`-32602` otherwise), response text is at `.result.artifacts[].parts[].text`,
-  and request parts use `type:"text"` while response parts use `kind:"text"`.
-- `packages/app/src/components/catalog/EntityPage.tsx` — `isKagentAgent` switches
-  agents onto a dedicated 3-tab layout and renders a Markdown summary fetched
-  through the Kubernetes proxy (annotations alone were insufficient — the kagent
-  controller drops some fields)
+- `kagent-shared/resolver.ts` — resolves an agent name through the *local* catalog API
+  (`coreServices.discovery`), requires `spec.type: kagent-agent` and an
+  `api.kagent.dev` `Agent` behind it, and returns the controller gateway URL
+- `kagent-shared/invoker.ts` — A2A **v1** JSON-RPC `SendMessage` (header
+  `A2A-Version: 1.0`, `X-User-Id: backstage-portal`; `role: ROLE_USER`,
+  `parts: [{text}]`). The reply is `result.task` (`TASK_STATE_*`; answer = text parts
+  of `status.message` + `artifacts[]`, `data` parts are tool calls) or
+  `result.message`. Only `-32004` + ErrorInfo `KAGENT_SEND_NOT_ACCEPTED` is retried.
+  Wire format verified against kagent `v1.0.0-alpha11` source, not a live controller.
+- `packages/app/src/components/catalog/KagentAgentCard.tsx` — `isKagentAgent`
+  switches agents onto a dedicated layout; the "About this agent" card reads the
+  Agent and its AgentTemplate through the Kubernetes proxy (RBAC:
+  `backstage-kagent-read` in `arigsela/kubernetes`)
 - `packages/app/src/scaffolder/KagentSuggestField/` — an rjsf field extension
   registered under `<ScaffolderFieldExtensions>` on the `/create` route. **The field
   IS the array it edits** (owns its value via `props.onChange`); an earlier design
