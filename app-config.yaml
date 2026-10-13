@@ -412,15 +412,20 @@ kubernetes:
 # Where the kagent-suggest route and the kagent:agent:invoke scaffolder action
 # send A2A calls. kagent 1.0 has no per-agent Service: the controller's A2A
 # gateway serves every Agent at <a2aBaseUrl>/agents/<namespace>/<name>
-# (A2A v1 JSON-RPC, SendMessage). The gateway is unauthenticated in kagent's
-# default `insecure` auth mode and takes the caller's identity from the
-# X-User-Id header; a2aUserId is what the portal sends (it owns the Sessions
-# the portal creates). Both keys are optional — these are the defaults.
+# (A2A v1 JSON-RPC, SendMessage). In the cluster a service mesh in front of the
+# controller verifies the caller's token and sets the identity from it: the
+# portal sends `Authorization: Bearer <projected service account token>` read
+# from a2aTokenFile (or $KAGENT_TOKEN_FILE; the Deployment mounts it at
+# /var/run/kagent/token, audience kagent) and NO X-User-Id, so its Sessions are
+# owned by system:serviceaccount:backstage:default. Without a token file (local
+# dev, port-forward, no mesh) the controller's insecure mode takes the identity
+# from X-User-Id and a2aUserId is what the portal sends. All keys are optional.
 # For local dev: kubectl port-forward -n kagent svc/kagent-controller 8083 and
 # set a2aBaseUrl: http://127.0.0.1:8083 in app-config.local.yaml.
 kagent:
   a2aBaseUrl: http://kagent-controller.kagent.svc.cluster.local:8083
   a2aUserId: backstage-portal
+  # a2aTokenFile: /var/run/kagent/token   # set by the Deployment via KAGENT_TOKEN_FILE
 
 # --- CONTAINER CVE REPORTS ---
 # Points the `cve` backend plugin at the S3 bucket where the weekly Trivy
