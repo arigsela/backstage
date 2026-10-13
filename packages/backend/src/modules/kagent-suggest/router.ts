@@ -83,6 +83,7 @@ export async function createRouter(opts: {
           timeoutMs,
           stepId: `kagent-suggest-${Date.now()}`,
           userId: a2a.userId,
+          tokenFile: a2a.tokenFile,
         },
         logger,
       );

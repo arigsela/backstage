@@ -34,7 +34,8 @@ A2A v1 JSON-RPC, verified against kagent `v1.0.0-alpha11`
 ```json
 POST /agents/kagent/skill-suggester
 A2A-Version: 1.0
-X-User-Id: backstage-portal
+Authorization: Bearer <projected service account token>   # in the cluster (kagent.a2aTokenFile)
+X-User-Id: backstage-portal                                # only without a token file (local dev)
 
 {"jsonrpc": "2.0", "id": "<task id>", "method": "SendMessage",
  "params": {"message": {"messageId": "<uuid>", "role": "ROLE_USER",
@@ -44,7 +45,9 @@ X-User-Id: backstage-portal
 The reply is `result.task` (`status.state` is `TASK_STATE_*`; the answer is
 the text parts of `status.message` and `artifacts[]`, while `data` parts are
 tool calls and are skipped) or `result.message`. No `contextId` is sent, so
-every call is a new kagent Session owned by the `X-User-Id` user. A JSON-RPC
+every call is a new kagent Session owned by the caller: the identity the mesh
+derives from the token (`system:serviceaccount:backstage:default`) in the
+cluster, the `X-User-Id` user otherwise. A JSON-RPC
 `-32004` whose ErrorInfo `metadata.reason` is `KAGENT_SEND_NOT_ACCEPTED` is
 retried with the same message for up to 30 s; nothing else is.
 

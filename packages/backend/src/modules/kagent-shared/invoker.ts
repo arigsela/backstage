@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { readFileSync } from 'fs';
 import { AgentInvocationError } from './errors';
 
 export interface InvokeOptions {
@@ -11,6 +12,25 @@ export interface InvokeOptions {
    * makes that user the owner of the Session the call creates.
    */
   userId?: string;
+  /**
+   * Projected service account token file. When set it wins over userId: the
+   * request carries `Authorization: Bearer <token>` and no X-User-Id, and the
+   * service mesh in front of the controller sets the identity from the verified
+   * token (system:serviceaccount:<ns>:<name>). Read on every call.
+   */
+  tokenFile?: string;
+}
+
+
+function readToken(file: string): string {
+  try {
+    return readFileSync(file, 'utf8').trim();
+  } catch (e) {
+    throw new AgentInvocationError(
+      'ENDPOINT_UNREACHABLE',
+      `cannot read the kagent token file ${file}: ${(e as Error).message}`,
+    );
+  }
 }
 
 /**
@@ -179,11 +199,15 @@ export async function invokeAgent(
       },
     },
   });
-  const headers = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'A2A-Version': '1.0',
-    'X-User-Id': opts.userId ?? DEFAULT_A2A_USER_ID,
   };
+  if (opts.tokenFile) {
+    headers.Authorization = `Bearer ${readToken(opts.tokenFile)}`;
+  } else {
+    headers['X-User-Id'] = opts.userId ?? DEFAULT_A2A_USER_ID;
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);

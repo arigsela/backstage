@@ -239,3 +239,46 @@ describe('sendNotAcceptedDelayMs', () => {
     ).toBeUndefined();
   });
 });
+
+describe('invokeAgent with a token file (callers as principals)', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  let fetchSpy: jest.SpyInstance;
+  let dir: string;
+
+  beforeEach(() => {
+    fetchSpy = jest.spyOn(global, 'fetch');
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kagent-token-'));
+  });
+  afterEach(() => {
+    fetchSpy.mockRestore();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('sends Authorization: Bearer from the file and no X-User-Id', async () => {
+    const file = path.join(dir, 'token');
+    fs.writeFileSync(file, 'first.tok.en\n');
+    fetchSpy.mockResolvedValue(a2aResponse(completedTask('ok')));
+
+    await invokeAgent(ENDPOINT, 'hi', { ...OPTS, userId: 'ignored', tokenFile: file }, mockLogger());
+    expect(fetchSpy.mock.calls[0][1].headers).toEqual({
+      'Content-Type': 'application/json',
+      'A2A-Version': '1.0',
+      Authorization: 'Bearer first.tok.en',
+    });
+
+    // projected tokens rotate: the file is read on every call
+    fs.writeFileSync(file, 'second.tok.en\n');
+    await invokeAgent(ENDPOINT, 'hi', { ...OPTS, tokenFile: file }, mockLogger());
+    expect(fetchSpy.mock.calls[1][1].headers.Authorization).toBe('Bearer second.tok.en');
+  });
+
+  it('fails before sending when the token file is unreadable', async () => {
+    fetchSpy.mockResolvedValue(a2aResponse(completedTask('ok')));
+    await expect(
+      invokeAgent(ENDPOINT, 'hi', { ...OPTS, tokenFile: path.join(dir, 'missing') }, mockLogger()),
+    ).rejects.toMatchObject({ code: 'ENDPOINT_UNREACHABLE' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

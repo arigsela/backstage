@@ -109,7 +109,12 @@ export function createKagentInvokeAction(opts: {
         const text = await invokeAgent(
           info.endpoint,
           inputs.prompt,
-          { timeoutMs, stepId: ctx.task?.id ?? 'unknown', userId: a2a.userId },
+          {
+            timeoutMs,
+            stepId: ctx.task?.id ?? 'unknown',
+            userId: a2a.userId,
+            tokenFile: a2a.tokenFile,
+          },
           ctx.logger,
         );
 

@@ -119,7 +119,8 @@ was deleted from the manifests on 2026-07-14; nothing reads it any more.)
   (`coreServices.discovery`), requires `spec.type: kagent-agent` and an
   `api.kagent.dev` `Agent` behind it, and returns the controller gateway URL
 - `kagent-shared/invoker.ts` — A2A **v1** JSON-RPC `SendMessage` (header
-  `A2A-Version: 1.0`, `X-User-Id: backstage-portal`; `role: ROLE_USER`,
+  `A2A-Version: 1.0`, `Authorization: Bearer <projected SA token>` from
+  `kagent.a2aTokenFile`/`$KAGENT_TOKEN_FILE`, else `X-User-Id: backstage-portal`; `role: ROLE_USER`,
   `parts: [{text}]`). The reply is `result.task` (`TASK_STATE_*`; answer = text parts
   of `status.message` + `artifacts[]`, `data` parts are tool calls) or
   `result.message`. Only `-32004` + ErrorInfo `KAGENT_SEND_NOT_ACCEPTED` is retried.
