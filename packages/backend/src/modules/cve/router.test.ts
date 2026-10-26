@@ -93,11 +93,26 @@ describe('POST /report', () => {
   it('returns totals and findings for a matched image', async () => {
     const res = await request(await appWith(stubStore()))
       .post('/report')
-      .send({ images: ['team/app:v9'] });
+      .send({ images: ['team/app:v2'] });
     expect(res.body.scannedAt).toBe('2026-08-17');
-    expect(res.body.totals).toEqual({ critical: 2, high: 0, actionable: 2 });
-    expect(res.body.matchedRefs).toEqual(['team/app:v9']);
+    expect(res.body.totals).toEqual({
+      critical: 2,
+      high: 0,
+      actionable: 2,
+      criticalNoFix: 0,
+      kevFixable: 0,
+    });
+    expect(res.body.matchedRefs).toEqual(['team/app:v2']);
     expect(res.body.findings).toHaveLength(2);
+  });
+
+  it('reports a newer tag of a scanned repo as unmatched, not with the old tag findings', async () => {
+    const res = await request(await appWith(stubStore()))
+      .post('/report')
+      .send({ images: ['team/app:v9'] });
+    expect(res.body.matchedRefs).toEqual([]);
+    expect(res.body.unmatchedRefs).toEqual(['team/app:v9']);
+    expect(res.body.totals.actionable).toBe(0);
   });
 
   it('reports an unscanned image as unmatched, not as clean', async () => {
@@ -178,9 +193,20 @@ describe('POST /report', () => {
     // aggregate.ts) counted it once — a phantom "+N" regression between the
     // headline and the sparkline's own last point.
     const store = stubStore({
+      // The scan caught the rollout: both tags were running and both scanned.
       getLatest: jest.fn().mockResolvedValue({
         date: '2026-08-17',
-        reduced: reduceReport(report('team/app:v2', ['CVE-1', 'CVE-2'])),
+        reduced: reduceReport(
+          multiReport(
+            ['team/app:v2', 'team/app:v3'],
+            [
+              { image: 'team/app:v2', id: 'CVE-1' },
+              { image: 'team/app:v2', id: 'CVE-2' },
+              { image: 'team/app:v3', id: 'CVE-1' },
+              { image: 'team/app:v3', id: 'CVE-2' },
+            ],
+          ),
+        ),
       }),
       getHistory: jest
         .fn()
@@ -194,7 +220,7 @@ describe('POST /report', () => {
     const res = await request(await appWith(store))
       .post('/report')
       .send({ images: ['team/app:v2', 'team/app:v3'] });
-    // Two pod-running tags of the same repo both match the one scanned repo.
+    // Two pod-running tags of the same repo, both scanned, share one repo trend.
     expect(res.body.matchedRefs).toEqual(['team/app:v2', 'team/app:v3']);
     expect(res.body.totals.actionable).toBe(2);
     const newest = res.body.trend[res.body.trend.length - 1];

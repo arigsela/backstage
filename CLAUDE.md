@@ -85,7 +85,8 @@ de-facto architecture doc and are kept current.
 | `modules/scaffolder/` | A single `createBackendModule({pluginId:'scaffolder', moduleId:'custom-actions'})` registering all custom actions via `scaffolderActionsExtensionPoint` |
 | `modules/kagent-suggest/` | A `createBackendPlugin` exposing `POST /api/kagent-suggest/invoke` |
 | `modules/kagent-shared/` | Library shared by the two above — `resolveAgent` / `invokeAgent` / `validateInvokeInput` / `tolerantParseJson` |
-| `modules/cve/` | A `createBackendPlugin` exposing `POST /api/cve/report` and `GET /api/cve/health` — fetches the weekly Trivy scan report from S3, reduces it to actionable (CRITICAL/HIGH + fixed) findings, and joins it to a posted list of image references by repository path. See `docs/guides/container-cve-surfacing.md`. |
+| `modules/cve/` | A `createBackendPlugin` exposing `POST /api/cve/report` and `GET /api/cve/health` — fetches the weekly Trivy scan report from S3, reduces it to actionable (CRITICAL/HIGH + fixed) findings, and joins it to a posted list of image references by exact ref or digest (the trend by repository path). See `docs/guides/container-cve-surfacing.md`. |
+| `modules/scorecard-cve/` | A scorecard backend module (`pluginId: 'scorecard'`) registering provider `cve.scan`: the Scorecard CVE cards (see "Scorecard (RHDH)" below). Reuses `modules/cve/`'s ReportStore and matching. |
 
 Custom scaffolder actions (all in `modules/scaffolder/`, each with a colocated
 `.test.ts`): `publish:file`, `aws:ecr:create`, `aws:ecr:build-push`, `vault:setup`,
@@ -186,8 +187,8 @@ versions; check `git diff origin/main -- yarn.lock | grep '^+"@backstage/'` prin
 nothing after any scorecard change. Metrics: `github.openPRs` (from
 `github.com/project-slug`), `dependabot.alerts*` (entities opt in with
 `github.com/dependabot: 'true'`, and the repo needs Dependabot alerts on). Metrics are
-collected on a schedule and stored (hourly, first run 1 minute after startup), so a
-fresh pod answers `[]` for an entity until then. **Do not add
+collected on a schedule and stored (hourly, first run 1 minute after the deploy that
+adds a provider), so a newly added provider answers `[]` for an entity until then. **Do not add
 `scorecard-backend-module-filecheck` back:** in v1.6.0 its first run downloaded the
 ~105 MB kubernetes repo archive once per entity, stalled the event loop and the DB
 pool, and the liveness probe killed the pod; a killed run retries when its 15-minute
@@ -196,6 +197,26 @@ lock expires, so it loops. `scripts/check-scorecard-contract.sh` fails if a
 either: TechDocs resolves `techdocs-ref: dir:.` against it. The entity
 page tab uses `EntityScorecardContent` from the package's `/legacy` entry (this app is
 on the legacy `createApp`).
+
+**CVE cards** (`modules/scorecard-cve/`, ours, since v1.7.0): `cve.criticalFixable` and
+`cve.kevFixable` (CISA KEV, any severity) turn red at 1, because a new image fixes
+them; `cve.criticalNoFix` and `cve.imagesNotScanned` turn amber at most, for
+awareness. Non-exploited highs, mediums and lows get no card. Entities with
+`backstage.io/kubernetes-label-selector` or `kubernetes-id` (the provider returns an
+array filter, which `queryEntities` ORs). Images come from the Kubernetes plugin
+(`POST /api/kubernetes/services/:name` with a service token), the same answer the
+Security tab gets; an entity with no running pods (kagent agents between
+conversations, CronJobs) gets an error, never zeros. Keep it cheap: the scorecard
+calculates 50 entities at once, so the provider allows 2 Kubernetes lookups at a time
+(20 s timeout each), `ReportStore.getLatest` shares one in-flight S3 fetch (S3
+timeouts 5 s connect / 30 s request) and replays a failure for 60 s. An entity none of
+whose images is in the last scan gets an error, not zeros; the KEV card has no value
+when the scan's KEV feed was down (`kev: null`). Daily at 05:00 UTC
+(`scorecard.metricProviders.cve.scan.schedule`); `initialDelay` only applies when a
+task is first registered, so the deploy that adds it runs it ~2 minutes in and later
+restarts keep the schedule. Known gaps: pods in any phase count as running (the
+Security tab does the same), and the Security tab's trend now covers matched repos
+only.
 
 ### Config layering
 

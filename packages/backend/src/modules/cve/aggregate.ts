@@ -8,7 +8,9 @@
 import type {
   ActionableFinding,
   ComponentReport,
+  CountedFinding,
   HistoryPoint,
+  ImageFindings,
   RawFinding,
   RawReport,
   ReducedReport,
@@ -19,9 +21,9 @@ const ACTIONABLE_SEVERITIES = new Set(['CRITICAL', 'HIGH']);
 /**
  * Reduce an image reference to its repository path.
  *
- * Tags bump on every release, so matching on the full ref would silently
- * empty the trend sparkline for any component that ever shipped. The repo
- * path is the only part stable across releases.
+ * For the trend only. Tags bump on every release, so the sparkline needs the
+ * one part stable across releases. Current findings match the exact ref or
+ * digest instead (see scannedRefFor).
  */
 export function normalizeImageRef(ref: string): string {
   // Digest first — a digest can follow a tag ("app:v1@sha256:...").
@@ -36,6 +38,14 @@ export function normalizeImageRef(ref: string): string {
     out = out.slice(0, lastColon);
   }
   return out;
+}
+
+/** The `sha256:…` digest of a ref, or undefined for a tag-only ref. */
+export function imageDigest(ref: string): string | undefined {
+  const atIdx = ref.indexOf('@');
+  if (atIdx === -1) return undefined;
+  const digest = ref.slice(atIdx + 1);
+  return digest.startsWith('sha256:') ? digest : undefined;
 }
 
 /**
@@ -64,10 +74,23 @@ export function isActionable(f: RawFinding): boolean {
   );
 }
 
+/** Critical with no fixed version upstream: shown for awareness only. */
+export function isCriticalNoFix(f: RawFinding): boolean {
+  return (
+    String(f.severity ?? '').toUpperCase() === 'CRITICAL' &&
+    !(f.fixed && f.fixed.trim() !== '')
+  );
+}
+
+/** Actively exploited (CISA KEV) and fixable, at any severity. */
+export function isKevFixable(f: RawFinding): boolean {
+  return f.kev === true && !!f.fixed && f.fixed.trim() !== '';
+}
+
 /** Two running tags of one repo can report the same CVE twice. */
-export function dedupeFindings(list: ActionableFinding[]): ActionableFinding[] {
+export function dedupeFindings<T extends CountedFinding>(list: T[]): T[] {
   const seen = new Set<string>();
-  const out: ActionableFinding[] = [];
+  const out: T[] = [];
   for (const f of list) {
     const key = `${f.id}|${f.pkg}|${f.installed}`;
     if (seen.has(key)) continue;
@@ -90,11 +113,12 @@ function toActionable(f: RawFinding): ActionableFinding {
 }
 
 /**
- * Reduce a full report to actionable findings indexed by repo.
+ * Reduce a full report to what the card, the table and the scorecard show:
+ * actionable findings by repo (trend) and by exact image ref, plus each
+ * image's critical-no-fix and KEV-fixable findings as counted keys.
  *
- * This is where the 8MB becomes a few hundred KB: non-actionable findings are
- * discarded here and never retained. Showing all severities later is a change
- * to this function, not to fetching or caching.
+ * This is where the ~10MB becomes a few hundred KB: everything else (medium,
+ * low, unfixable high) is discarded here and never retained.
  */
 export function reduceReport(raw: RawReport): ReducedReport {
   // Defense in depth: a caller that reaches this function without going
@@ -106,21 +130,45 @@ export function reduceReport(raw: RawReport): ReducedReport {
   assertRawReport(raw);
   const scannedRepos = new Set(raw.scanned.map(normalizeImageRef));
   const byRepo = new Map<string, ActionableFinding[]>();
+  const images = new Map<string, ImageFindings>();
+  const imageEntry = (ref: string): ImageFindings => {
+    let entry = images.get(ref);
+    if (!entry) {
+      entry = { actionable: [], criticalNoFix: [], kevFixable: [] };
+      images.set(ref, entry);
+    }
+    return entry;
+  };
+  for (const ref of raw.scanned) imageEntry(ref);
 
   for (const f of raw.findings) {
+    // A findings entry implies the image was scanned, even if `scanned` omits it.
+    const entry = imageEntry(f.image);
+    const counted = { id: f.id, pkg: f.pkg, installed: f.installed };
+    if (isCriticalNoFix(f)) entry.criticalNoFix.push(counted);
+    if (isKevFixable(f)) entry.kevFixable.push(counted);
     if (!isActionable(f)) continue;
     const repo = normalizeImageRef(f.image);
     const list = byRepo.get(repo);
     if (list) list.push(toActionable(f));
     else byRepo.set(repo, [toActionable(f)]);
-    // A findings entry implies the image was scanned, even if `scanned` omits it.
+    entry.actionable.push(toActionable(f));
     scannedRepos.add(repo);
   }
 
   for (const [repo, list] of byRepo) {
     byRepo.set(repo, dedupeFindings(list));
   }
-  return { scannedRepos, byRepo };
+  const refByDigest = new Map<string, string>();
+  for (const [ref, entry] of images) {
+    entry.actionable = dedupeFindings(entry.actionable);
+    entry.criticalNoFix = dedupeFindings(entry.criticalNoFix);
+    entry.kevFixable = dedupeFindings(entry.kevFixable);
+    const digest = imageDigest(ref);
+    if (digest) refByDigest.set(digest, ref);
+  }
+  const kevChecked = raw.findings.every(f => typeof f.kev === 'boolean');
+  return { scannedRepos, byRepo, images, refByDigest, kevChecked };
 }
 
 /**
@@ -141,6 +189,21 @@ export function historyPointFromRaw(
   return { date, scannedRepos: reduced.scannedRepos, countsByRepo };
 }
 
+/**
+ * The scanned ref a running ref stands for: the same ref, or the same digest
+ * written differently (`repo@sha256:x` vs `repo:v1@sha256:x`). Never another
+ * tag of the same repo: that reported last week's image (hk-demo v0.5.0's
+ * CVEs against the v0.7.0 it was running) as the current one.
+ */
+function scannedRefFor(
+  reduced: ReducedReport,
+  ref: string,
+): string | undefined {
+  if (reduced.images.has(ref)) return ref;
+  const digest = imageDigest(ref);
+  return digest ? reduced.refByDigest.get(digest) : undefined;
+}
+
 /** Answer the per-component question: what is running, and what is wrong with it. */
 export function summarizeForImages(
   reduced: ReducedReport,
@@ -149,12 +212,18 @@ export function summarizeForImages(
   const matchedRefs: string[] = [];
   const unmatchedRefs: string[] = [];
   const collected: ActionableFinding[] = [];
+  const noFix: CountedFinding[] = [];
+  const kev: CountedFinding[] = [];
 
   for (const ref of Array.from(new Set(images))) {
-    const repo = normalizeImageRef(ref);
-    if (reduced.scannedRepos.has(repo)) {
+    const scanned = scannedRefFor(reduced, ref);
+    const entry =
+      scanned === undefined ? undefined : reduced.images.get(scanned);
+    if (entry) {
       matchedRefs.push(ref);
-      collected.push(...(reduced.byRepo.get(repo) ?? []));
+      collected.push(...entry.actionable);
+      noFix.push(...entry.criticalNoFix);
+      kev.push(...entry.kevFixable);
     } else {
       unmatchedRefs.push(ref);
     }
@@ -168,6 +237,8 @@ export function summarizeForImages(
       critical: findings.filter(f => f.severity === 'CRITICAL').length,
       high: findings.filter(f => f.severity === 'HIGH').length,
       actionable: findings.length,
+      criticalNoFix: dedupeFindings(noFix).length,
+      kevFixable: dedupeFindings(kev).length,
     },
     findings,
   };

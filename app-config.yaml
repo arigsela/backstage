@@ -370,9 +370,25 @@ mcpActions:
 # --- SCORECARD (Red Hat Developer Hub) ---
 # Per-entity metrics with success/warning/error thresholds (provider defaults).
 # The GitHub and Dependabot providers run hourly (API calls) with their default
-# schedules, so there is no `scorecard:` block. The filecheck provider is not
-# installed: it downloads the ~105 MB kubernetes repo archive once per entity and
-# stalled the backend in v1.6.0 (see packages/backend/src/index.ts).
+# schedules. The filecheck provider is not installed: it downloads the ~105 MB
+# kubernetes repo archive once per entity and stalled the backend in v1.6.0
+# (see packages/backend/src/index.ts).
+#
+# cve.scan is ours (packages/backend/src/modules/scorecard-cve): the CVE cards,
+# from the weekly Trivy report (`cve:` below) matched against each entity's
+# running images. Daily is enough: the report changes on Sundays and images on
+# deploys. Each run reads one cached report and makes at most 2 Kubernetes
+# lookups at a time (20 s each at most). initialDelay applies only when the
+# task is first registered: the deploy that adds it runs it ~2 minutes in;
+# later restarts keep the 05:00 UTC schedule (stored values persist).
+scorecard:
+  metricProviders:
+    cve:
+      scan:
+        schedule:
+          frequency: { cron: '0 5 * * *' }
+          timeout: { minutes: 10 }
+          initialDelay: { minutes: 2 }
 
 # --- KUBERNETES ---
 # The Kubernetes plugin shows pod/deployment status directly on entity pages.

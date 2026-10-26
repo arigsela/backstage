@@ -38,6 +38,46 @@ function fakeSource(objects: Record<string, RawReport>) {
   return { source: { getJson, listKeys } as ReportSource, getJson, listKeys };
 }
 
+describe('ReportStore.getLatest concurrency', () => {
+  // The scorecard calculates up to 50 entities at once. On a cold cache each
+  // would otherwise download and parse the ~10 MB report itself.
+  it('shares one fetch between concurrent callers on a cold cache', async () => {
+    const { source, getJson } = fakeSource({
+      'cve-reports/latest.json': report('team/app:v1', ['CVE-1']),
+      'cve-reports/2026-08-17.json': report('team/app:v1', ['CVE-1']),
+    });
+    const store = new ReportStore(source, cfg);
+    const all = await Promise.all([
+      store.getLatest(),
+      store.getLatest(),
+      store.getLatest(),
+    ]);
+    expect(getJson).toHaveBeenCalledTimes(1);
+    expect(all[1].reduced).toBe(all[0].reduced);
+  });
+
+  it('remembers a failure for a minute, then retries', async () => {
+    // A broken latest.json must not be downloaded and parsed (~10 MB) again
+    // for every pair of entities in a scorecard run.
+    const { source, getJson } = fakeSource({
+      'cve-reports/latest.json': report('team/app:v1', ['CVE-1']),
+      'cve-reports/2026-08-17.json': report('team/app:v1', ['CVE-1']),
+    });
+    getJson.mockRejectedValueOnce(new Error('S3 timeout'));
+    let now = 1_000_000;
+    const store = new ReportStore(source, cfg, () => now);
+    await expect(store.getLatest()).rejects.toThrow('S3 timeout');
+    now += 30_000;
+    await expect(store.getLatest()).rejects.toThrow('S3 timeout');
+    expect(getJson).toHaveBeenCalledTimes(1);
+    now += 31_000;
+    await expect(store.getLatest()).resolves.toMatchObject({
+      date: '2026-08-17',
+    });
+    expect(getJson).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('ReportStore.getLatest', () => {
   it('fetches and reduces latest.json', async () => {
     const { source } = fakeSource({

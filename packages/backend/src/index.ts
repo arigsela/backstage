@@ -241,6 +241,9 @@ backend.add(import('@backstage/plugin-mcp-actions-backend'));
  * - module-github: github.openPRs, from github.com/project-slug
  * - module-dependabot: open Dependabot alerts by severity; entities opt in with
  *   github.com/dependabot: 'true' and the repo needs Dependabot alerts enabled
+ * - ./modules/scorecard-cve (ours): cve.criticalFixable, cve.kevFixable,
+ *   cve.criticalNoFix, cve.imagesNotScanned for every entity with a Kubernetes
+ *   annotation, from the weekly Trivy report and the running images. Daily.
  *
  * No module-filecheck: v1.6.0 shipped it and its first run stalled the backend
  * (it downloads the ~105 MB kubernetes repo archive once per entity) until the
@@ -264,6 +267,7 @@ backend.add(
     '@red-hat-developer-hub/backstage-plugin-scorecard-backend-module-dependabot'
   ),
 );
+backend.add(import('./modules/scorecard-cve'));
 
 /**
  * GITHUB CATALOG DISCOVERY (Phase 4)

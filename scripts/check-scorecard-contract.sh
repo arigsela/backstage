@@ -10,8 +10,10 @@
 #   3. the existing `catalog` MCP server (kagent's backstage-catalog
 #      RemoteMCPServer) still lists exactly its three tools;
 #   4. with ENTITY_REF set, that entity has a value for github.openPRs (collected
-#      hourly, first run 1 minute after startup). Dependabot metrics are printed,
-#      not asserted: they depend on the repo's Dependabot alerts setting.
+#      hourly, first run 1 minute after startup). Dependabot and cve.* metrics
+#      are printed, not asserted: Dependabot depends on the repo's alerts
+#      setting, and cve.* is collected daily at 05:00 UTC (first run ~2 minutes
+#      after the deploy that adds it).
 #
 # Usage:
 #   BACKSTAGE_URL=http://localhost:7007 bash scripts/check-scorecard-contract.sh
@@ -79,14 +81,15 @@ import json, sys
 doc = json.load(open(sys.argv[1]))
 items = doc.get("metrics", doc) if isinstance(doc, dict) else doc
 ids = {m["id"] for m in items}
-want = ["github.openPRs"]
+want = ["github.openPRs", "cve.criticalFixable", "cve.kevFixable",
+        "cve.criticalNoFix", "cve.imagesNotScanned"]
 gaps = [w for w in want if w not in ids]
 if not any(i.startswith("dependabot.") for i in ids):
     gaps.append("dependabot.*")
 print(" ".join(gaps))
 ' "${TMP}/metrics.json")
 [ -z "${missing}" ] || fail "metrics not registered: ${missing}"
-pass "github.openPRs and dependabot.* registered"
+pass "github.openPRs, dependabot.* and the four cve.* metrics registered"
 # filecheck was removed in v1.6.1: each run downloaded the kubernetes repo archive
 # once per entity and stalled the backend until the liveness probe killed it.
 banned=$(python3 -I -c '
@@ -137,7 +140,7 @@ for want in ("github.openPRs",):
         evaluation = (result.get("thresholdResult") or {}).get("evaluation")
         print("  ok: %s = %s (%s)" % (want, value, evaluation))
 for mid, m in sorted(results.items()):
-    if mid.startswith("dependabot."):
+    if mid.startswith(("dependabot.", "cve.")):
         value = (m.get("result") or {}).get("value")
         print("  info: %s status=%s value=%s" % (mid, m.get("status"), value))
 if bad:

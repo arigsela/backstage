@@ -23,7 +23,12 @@ export interface ReportSource {
 export function createS3ReportSource(cfg: CveConfig): ReportSource {
   // Credentials come from the default AWS chain (env vars in the pod),
   // identical to the existing ECRClient actions in modules/scaffolder.
-  const client = new S3Client({ region: cfg.region });
+  // Timeouts: ReportStore shares one in-flight fetch, so a hung GET would
+  // otherwise hold every Security tab request and the scorecard run with it.
+  const client = new S3Client({
+    region: cfg.region,
+    requestHandler: { connectionTimeout: 5_000, requestTimeout: 30_000 },
+  });
 
   return {
     async getJson(key: string): Promise<unknown> {
