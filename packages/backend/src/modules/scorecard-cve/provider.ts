@@ -91,13 +91,23 @@ export class CveMetricProvider implements MetricProvider<'number'> {
       // Zeros would read as "clean"; an error reads as "we don't know".
       throw new Error('no running pods found in Kubernetes for this entity');
     }
-    const { reduced } = await this.opts.store.getLatest();
+    const { date, reduced } = await this.opts.store.getLatest();
     const s = summarizeForImages(reduced, images);
-    return new Map<string, number>([
+    if (s.matchedRefs.length === 0) {
+      // Zeros would claim "clean" for images nobody scanned (a deploy since
+      // Sunday, or a scan that failed for that image).
+      throw new Error(
+        `none of the ${images.length} running images is in the last weekly scan (${date})`,
+      );
+    }
+    const values = new Map<string, number>([
       ['cve.criticalFixable', s.totals.critical],
-      ['cve.kevFixable', s.totals.kevFixable],
       ['cve.criticalNoFix', s.totals.criticalNoFix],
       ['cve.imagesNotScanned', s.unmatchedRefs.length],
     ]);
+    // Left out when the scan could not reach the KEV feed: the scorecard then
+    // stores an error for this card instead of a green 0.
+    if (reduced.kevChecked) values.set('cve.kevFixable', s.totals.kevFixable);
+    return values;
   }
 }

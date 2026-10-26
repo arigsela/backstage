@@ -167,7 +167,8 @@ export function reduceReport(raw: RawReport): ReducedReport {
     const digest = imageDigest(ref);
     if (digest) refByDigest.set(digest, ref);
   }
-  return { scannedRepos, byRepo, images, refByDigest };
+  const kevChecked = raw.findings.every(f => typeof f.kev === 'boolean');
+  return { scannedRepos, byRepo, images, refByDigest, kevChecked };
 }
 
 /**

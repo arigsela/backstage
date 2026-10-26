@@ -201,6 +201,34 @@ describe('historyPointFromRaw', () => {
   });
 });
 
+describe('reduceReport KEV coverage', () => {
+  it('marks KEV as checked when every finding carries a true/false flag', () => {
+    const r = reduceReport({
+      scanned: ['team/app:v1'],
+      failed: [],
+      findings: [
+        finding({ image: 'team/app:v1', kev: false }),
+        finding({ image: 'team/app:v1', id: 'CVE-2', kev: true }),
+      ],
+    });
+    expect(r.kevChecked).toBe(true);
+  });
+
+  it('marks KEV as unchecked when the feed was down (kev: null) or absent', () => {
+    for (const kev of [null, undefined]) {
+      const r = reduceReport({
+        scanned: ['team/app:v1'],
+        failed: [],
+        findings: [
+          finding({ image: 'team/app:v1', kev: false }),
+          finding({ image: 'team/app:v1', id: 'CVE-2', kev }),
+        ],
+      });
+      expect(r.kevChecked).toBe(false);
+    }
+  });
+});
+
 describe('summarizeForImages', () => {
   const APP = 'team/app:v1.0.0@sha256:aaa';
   const reduced = reduceReport({

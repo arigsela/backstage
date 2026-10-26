@@ -46,29 +46,44 @@ function clusterErrors(objects: any): string[] {
   return out;
 }
 
+/** Per-lookup limit: 40 entities at 2 at a time stay well inside the 10-minute task timeout. */
+const DEFAULT_TIMEOUT_MS = 20_000;
+
 export function kubernetesImageSource(opts: {
   discovery: Pick<DiscoveryService, 'getBaseUrl'>;
   auth: Pick<AuthService, 'getOwnServiceCredentials' | 'getPluginRequestToken'>;
   fetchFn?: typeof fetch;
+  timeoutMs?: number;
 }): ImageSource {
   const fetchFn = opts.fetchFn ?? fetch;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return async entity => {
     const base = await opts.discovery.getBaseUrl('kubernetes');
     const { token } = await opts.auth.getPluginRequestToken({
       onBehalfOf: await opts.auth.getOwnServiceCredentials(),
       targetPluginId: 'kubernetes',
     });
-    const res = await fetchFn(
-      `${base}/services/${encodeURIComponent(entity.metadata.name)}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+    const signal = AbortSignal.timeout(timeoutMs);
+    let res: Response;
+    try {
+      res = await fetchFn(
+        `${base}/services/${encodeURIComponent(entity.metadata.name)}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ entity }),
+          signal,
         },
-        body: JSON.stringify({ entity }),
-      },
-    );
+      );
+    } catch (e) {
+      if (signal.aborted) {
+        throw new Error(`kubernetes lookup timed out after ${timeoutMs} ms`);
+      }
+      throw e;
+    }
     if (!res.ok) {
       throw new Error(`kubernetes backend answered HTTP ${res.status}`);
     }

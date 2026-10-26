@@ -12,7 +12,8 @@
 #   4. with ENTITY_REF set, that entity has a value for github.openPRs (collected
 #      hourly, first run 1 minute after startup). Dependabot and cve.* metrics
 #      are printed, not asserted: Dependabot depends on the repo's alerts
-#      setting, and cve.* is collected daily (first run 2 minutes after startup).
+#      setting, and cve.* is collected daily at 05:00 UTC (first run ~2 minutes
+#      after the deploy that adds it).
 #
 # Usage:
 #   BACKSTAGE_URL=http://localhost:7007 bash scripts/check-scorecard-contract.sh

@@ -86,6 +86,23 @@ describe('kubernetesImageSource', () => {
     expect(JSON.parse(init.body)).toEqual({ entity });
   });
 
+  it('gives up on a lookup that hangs', async () => {
+    // A slow kube API must not hold a scorecard slot (and the run) open.
+    const fetchFn = jest.fn(
+      (_url: string, init: any) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () =>
+            reject(init.signal.reason),
+          );
+        }),
+    ) as any;
+    await expect(
+      kubernetesImageSource({ discovery, auth, fetchFn, timeoutMs: 20 })(
+        entity,
+      ),
+    ).rejects.toThrow('kubernetes lookup timed out after 20 ms');
+  });
+
   it('throws on a non-2xx answer', async () => {
     const fetchFn = respond(500, { error: 'boom' });
     await expect(

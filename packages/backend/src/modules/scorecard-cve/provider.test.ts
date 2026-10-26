@@ -1,5 +1,8 @@
 import type { Entity } from '@backstage/catalog-model';
-import { CATALOG_FILTER_EXISTS } from '@backstage/catalog-client';
+import {
+  CATALOG_FILTER_EXISTS,
+  CatalogClient,
+} from '@backstage/catalog-client';
 import { reduceReport } from '../cve/aggregate';
 import type { RawFinding } from '../cve/types';
 import { CveMetricProvider, createLimiter } from './provider';
@@ -22,6 +25,7 @@ function finding(over: Partial<RawFinding>): RawFinding {
     fixed: '3.0.14',
     severity: 'CRITICAL',
     title: 't',
+    kev: false,
     ...over,
   };
 }
@@ -58,6 +62,34 @@ describe('CveMetricProvider', () => {
     });
   });
 
+  it('fails the entity when none of its images is in the last scan', async () => {
+    // Three green zeros here would claim "clean" for images nobody scanned.
+    const provider = new CveMetricProvider({
+      store: store(),
+      images: async () => ['team/new:v2', 'team/other:v1'],
+    });
+    await expect(provider.calculateMetrics(entity('app'))).rejects.toThrow(
+      'none of the 2 running images is in the last weekly scan (2026-10-25)',
+    );
+  });
+
+  it('leaves the KEV card without a value when the scan could not check KEV', async () => {
+    const noKev = reduceReport({
+      scanned: ['team/app:v1'],
+      failed: [],
+      findings: [finding({ id: 'CVE-1', kev: null })],
+    });
+    const provider = new CveMetricProvider({
+      store: {
+        getLatest: async () => ({ date: '2026-10-25', reduced: noKev }),
+      },
+      images: async () => ['team/app:v1'],
+    });
+    const values = await provider.calculateMetrics(entity('app'));
+    expect(values.has('cve.kevFixable')).toBe(false);
+    expect(values.get('cve.criticalFixable')).toBe(1);
+  });
+
   it('fails the entity rather than reporting zeros when no pods are running', async () => {
     const provider = new CveMetricProvider({
       store: store(),
@@ -82,6 +114,34 @@ describe('CveMetricProvider', () => {
         'metadata.annotations.backstage.io/kubernetes-id':
           CATALOG_FILTER_EXISTS,
       },
+    ]);
+  });
+
+  it('sends both annotation filters to the catalog as alternatives', async () => {
+    // The scorecard passes getCatalogFilter() straight to queryEntities. Run
+    // it through the real CatalogClient: if a scorecard upgrade ever spreads
+    // or rewraps the filter, this is where an empty (match-all) filter shows.
+    const fetch = jest.fn(async (_url: string) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ items: [], totalItems: 0, pageInfo: {} }),
+    }));
+    const catalog = new CatalogClient({
+      discoveryApi: { getBaseUrl: async () => 'http://backend/api/catalog' },
+      fetchApi: { fetch: fetch as any },
+    });
+    const provider = new CveMetricProvider({
+      store: store(),
+      images: async () => [],
+    });
+    await catalog.queryEntities({
+      filter: provider.getCatalogFilter(),
+      limit: 50,
+    });
+    const url = new URL(fetch.mock.calls[0][0]);
+    expect(url.searchParams.getAll('filter')).toEqual([
+      'metadata.annotations.backstage.io/kubernetes-label-selector',
+      'metadata.annotations.backstage.io/kubernetes-id',
     ]);
   });
 

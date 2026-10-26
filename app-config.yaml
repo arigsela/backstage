@@ -378,8 +378,9 @@ mcpActions:
 # from the weekly Trivy report (`cve:` below) matched against each entity's
 # running images. Daily is enough: the report changes on Sundays and images on
 # deploys. Each run reads one cached report and makes at most 2 Kubernetes
-# lookups at a time. initialDelay also applies to a cron task, so a restart
-# runs it once ~2 minutes in.
+# lookups at a time (20 s each at most). initialDelay applies only when the
+# task is first registered: the deploy that adds it runs it ~2 minutes in;
+# later restarts keep the 05:00 UTC schedule (stored values persist).
 scorecard:
   metricProviders:
     cve:

@@ -75,6 +75,12 @@ export interface ReducedReport {
   images: Map<string, ImageFindings>;
   /** `sha256:…` digest → the scanned ref that carried it. */
   refByDigest: Map<string, string>;
+  /**
+   * False when any finding lacks a true/false `kev` flag: the scan could not
+   * reach the CISA KEV feed that week (it writes `kev: null`), so a KEV count
+   * of 0 would mean "unknown", not "none".
+   */
+  kevChecked: boolean;
 }
 
 /** One dated report reduced to what trend needs: coverage plus counts. */

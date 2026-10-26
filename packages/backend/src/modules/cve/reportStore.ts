@@ -32,6 +32,9 @@ import type { HistoryPoint, RawReport, ReducedReport } from './types';
  */
 const DATED_KEY = /(?:^|\/)(\d{4}-\d{2}-\d{2})\.json$/;
 
+/** How long a failed latest.json fetch is replayed before the next try. */
+const FAILURE_TTL_MS = 60_000;
+
 /** Extract report dates from a key listing, newest first. Pure. */
 function datesFromKeys(keys: string[]): string[] {
   return keys
@@ -49,6 +52,8 @@ export class ReportStore {
   private datesCache: string[] = [];
   /** The in-flight latest.json fetch that concurrent callers share. */
   private pendingLatest?: Promise<{ date: string; reduced: ReducedReport }>;
+  /** The last failed fetch, replayed for FAILURE_TTL_MS. */
+  private latestFailure?: { at: number; error: unknown };
 
   constructor(
     private readonly source: ReportSource,
@@ -93,17 +98,33 @@ export class ReportStore {
    * Concurrent callers on a cold or expired cache share one fetch. The
    * scorecard calculates up to 50 entities at once; without this each would
    * download and parse the ~10 MB report itself (the shape of the v1.6.0
-   * filecheck stall). A failed fetch is not cached: the next call retries.
+   * filecheck stall). A failure is replayed for FAILURE_TTL_MS, so a broken
+   * report is not re-downloaded for every entity, then retried.
    */
   async getLatest(): Promise<{ date: string; reduced: ReducedReport }> {
     const cached = this.latest;
     if (cached && this.now() - cached.fetchedAt < this.cfg.cacheTtlMs) {
       return { date: cached.date, reduced: cached.reduced };
     }
+    const failure = this.latestFailure;
+    if (failure && this.now() - failure.at < FAILURE_TTL_MS) {
+      throw failure.error;
+    }
     if (!this.pendingLatest) {
-      this.pendingLatest = this.refreshLatest().finally(() => {
-        this.pendingLatest = undefined;
-      });
+      this.pendingLatest = this.refreshLatest()
+        .then(
+          result => {
+            this.latestFailure = undefined;
+            return result;
+          },
+          error => {
+            this.latestFailure = { at: this.now(), error };
+            throw error;
+          },
+        )
+        .finally(() => {
+          this.pendingLatest = undefined;
+        });
     }
     return this.pendingLatest;
   }

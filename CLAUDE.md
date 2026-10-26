@@ -187,8 +187,8 @@ versions; check `git diff origin/main -- yarn.lock | grep '^+"@backstage/'` prin
 nothing after any scorecard change. Metrics: `github.openPRs` (from
 `github.com/project-slug`), `dependabot.alerts*` (entities opt in with
 `github.com/dependabot: 'true'`, and the repo needs Dependabot alerts on). Metrics are
-collected on a schedule and stored (hourly, first run 1 minute after startup), so a
-fresh pod answers `[]` for an entity until then. **Do not add
+collected on a schedule and stored (hourly, first run 1 minute after the deploy that
+adds a provider), so a newly added provider answers `[]` for an entity until then. **Do not add
 `scorecard-backend-module-filecheck` back:** in v1.6.0 its first run downloaded the
 ~105 MB kubernetes repo archive once per entity, stalled the event loop and the DB
 pool, and the liveness probe killed the pod; a killed run retries when its 15-minute
@@ -208,8 +208,15 @@ array filter, which `queryEntities` ORs). Images come from the Kubernetes plugin
 Security tab gets; an entity with no running pods (kagent agents between
 conversations, CronJobs) gets an error, never zeros. Keep it cheap: the scorecard
 calculates 50 entities at once, so the provider allows 2 Kubernetes lookups at a time
-and `ReportStore.getLatest` shares one in-flight S3 fetch. Daily at 05:00 UTC
-(`scorecard.metricProviders.cve.scan.schedule`), plus once ~2 minutes after startup.
+(20 s timeout each), `ReportStore.getLatest` shares one in-flight S3 fetch (S3
+timeouts 5 s connect / 30 s request) and replays a failure for 60 s. An entity none of
+whose images is in the last scan gets an error, not zeros; the KEV card has no value
+when the scan's KEV feed was down (`kev: null`). Daily at 05:00 UTC
+(`scorecard.metricProviders.cve.scan.schedule`); `initialDelay` only applies when a
+task is first registered, so the deploy that adds it runs it ~2 minutes in and later
+restarts keep the schedule. Known gaps: pods in any phase count as running (the
+Security tab does the same), and the Security tab's trend now covers matched repos
+only.
 
 ### Config layering
 

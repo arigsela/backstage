@@ -56,17 +56,25 @@ describe('ReportStore.getLatest concurrency', () => {
     expect(all[1].reduced).toBe(all[0].reduced);
   });
 
-  it('retries after a failed fetch instead of caching the failure', async () => {
+  it('remembers a failure for a minute, then retries', async () => {
+    // A broken latest.json must not be downloaded and parsed (~10 MB) again
+    // for every pair of entities in a scorecard run.
     const { source, getJson } = fakeSource({
       'cve-reports/latest.json': report('team/app:v1', ['CVE-1']),
       'cve-reports/2026-08-17.json': report('team/app:v1', ['CVE-1']),
     });
     getJson.mockRejectedValueOnce(new Error('S3 timeout'));
-    const store = new ReportStore(source, cfg);
+    let now = 1_000_000;
+    const store = new ReportStore(source, cfg, () => now);
     await expect(store.getLatest()).rejects.toThrow('S3 timeout');
+    now += 30_000;
+    await expect(store.getLatest()).rejects.toThrow('S3 timeout');
+    expect(getJson).toHaveBeenCalledTimes(1);
+    now += 31_000;
     await expect(store.getLatest()).resolves.toMatchObject({
       date: '2026-08-17',
     });
+    expect(getJson).toHaveBeenCalledTimes(2);
   });
 });
 
