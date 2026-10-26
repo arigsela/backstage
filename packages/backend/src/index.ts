@@ -241,10 +241,12 @@ backend.add(import('@backstage/plugin-mcp-actions-backend'));
  * - module-github: github.openPRs, from github.com/project-slug
  * - module-dependabot: open Dependabot alerts by severity; entities opt in with
  *   github.com/dependabot: 'true' and the repo needs Dependabot alerts enabled
- * - module-filecheck: whether runbook.md / docs.md exist in the folder the
- *   entity's backstage.io/source-location names (base-apps/<app>/ for apps whose
- *   catalog-info lives in arigsela/kubernetes). Runs daily, not hourly: each run
- *   downloads the source repo archive once per entity.
+ *
+ * No module-filecheck: v1.6.0 shipped it and its first run stalled the backend
+ * (it downloads the ~105 MB kubernetes repo archive once per entity) until the
+ * liveness probe killed the pod. The readiness skill reads runbook.md / docs.md
+ * from the deploy repo itself. scripts/check-scorecard-contract.sh fails if a
+ * filecheck.* metric is registered again.
  *
  * Config: `scorecard:` in app-config.yaml.
  * See: https://github.com/redhat-developer/rhdh-plugins/tree/main/workspaces/scorecard
@@ -260,11 +262,6 @@ backend.add(
 backend.add(
   import(
     '@red-hat-developer-hub/backstage-plugin-scorecard-backend-module-dependabot'
-  ),
-);
-backend.add(
-  import(
-    '@red-hat-developer-hub/backstage-plugin-scorecard-backend-module-filecheck'
   ),
 );
 

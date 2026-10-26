@@ -185,12 +185,15 @@ yarn takes newer releases that need Backstage 1.54+ and pull ~20 new `@backstage
 versions; check `git diff origin/main -- yarn.lock | grep '^+"@backstage/'` prints
 nothing after any scorecard change. Metrics: `github.openPRs` (from
 `github.com/project-slug`), `dependabot.alerts*` (entities opt in with
-`github.com/dependabot: 'true'`, and the repo needs Dependabot alerts on), and
-`filecheck.runbook`/`filecheck.docs`. filecheck reads the folder named by
-`backstage.io/source-location` (`base-apps/<app>/` for apps catalogued from the
-kubernetes repo) and downloads that repo's archive once per entity per run, so it runs
-daily at 06:00, not hourly. Do not repoint `source-location` to make it read an app
-repo: TechDocs resolves `techdocs-ref: dir:.` against the same annotation. The entity
+`github.com/dependabot: 'true'`, and the repo needs Dependabot alerts on). Metrics are
+collected on a schedule and stored (hourly, first run 1 minute after startup), so a
+fresh pod answers `[]` for an entity until then. **Do not add
+`scorecard-backend-module-filecheck` back:** in v1.6.0 its first run downloaded the
+~105 MB kubernetes repo archive once per entity, stalled the event loop and the DB
+pool, and the liveness probe killed the pod; a killed run retries when its 15-minute
+lock expires, so it loops. `scripts/check-scorecard-contract.sh` fails if a
+`filecheck.*` metric is registered. Do not repoint `backstage.io/source-location`
+either: TechDocs resolves `techdocs-ref: dir:.` against it. The entity
 page tab uses `EntityScorecardContent` from the package's `/legacy` entry (this app is
 on the legacy `createApp`).
 

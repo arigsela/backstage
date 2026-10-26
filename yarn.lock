@@ -13306,21 +13306,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@red-hat-developer-hub/backstage-plugin-scorecard-backend-module-filecheck@npm:1.0.2":
-  version: 1.0.2
-  resolution: "@red-hat-developer-hub/backstage-plugin-scorecard-backend-module-filecheck@npm:1.0.2"
-  dependencies:
-    "@backstage/backend-plugin-api": "npm:^1.9.2"
-    "@backstage/catalog-client": "npm:^1.16.0"
-    "@backstage/catalog-model": "npm:^1.9.0"
-    "@backstage/errors": "npm:^1.3.1"
-    "@backstage/integration": "npm:^2.0.3"
-    "@red-hat-developer-hub/backstage-plugin-scorecard-common": "npm:^4.2.0"
-    "@red-hat-developer-hub/backstage-plugin-scorecard-node": "npm:^4.2.0"
-  checksum: 10c0/43b9500a2d2a6723445773c48c8a40a7be293e187e64890246039ff619988cfbaa4de2844138a4f4a91aa4a985304c88f51abcbce94e0eb0cd2f8e8cb3056284
-  languageName: node
-  linkType: hard
-
 "@red-hat-developer-hub/backstage-plugin-scorecard-backend-module-github@npm:4.2.0":
   version: 4.2.0
   resolution: "@red-hat-developer-hub/backstage-plugin-scorecard-backend-module-github@npm:4.2.0"
@@ -19512,7 +19497,6 @@ __metadata:
     "@octokit/rest": "npm:^22.0.1"
     "@red-hat-developer-hub/backstage-plugin-scorecard-backend": "npm:4.2.0"
     "@red-hat-developer-hub/backstage-plugin-scorecard-backend-module-dependabot": "npm:1.0.2"
-    "@red-hat-developer-hub/backstage-plugin-scorecard-backend-module-filecheck": "npm:1.0.2"
     "@red-hat-developer-hub/backstage-plugin-scorecard-backend-module-github": "npm:4.2.0"
     "@terasky/backstage-plugin-crossplane-resources-backend": "npm:^1.15.0"
     "@terasky/backstage-plugin-kubernetes-ingestor": "npm:^3.14.0"
