@@ -202,36 +202,95 @@ describe('historyPointFromRaw', () => {
 });
 
 describe('summarizeForImages', () => {
+  const APP = 'team/app:v1.0.0@sha256:aaa';
   const reduced = reduceReport({
-    scanned: ['team/app:v1.0.0', 'team/clean:v2.0.0'],
+    scanned: [APP, 'team/clean:v2.0.0', 'team/old:v1'],
     failed: [],
     findings: [
-      finding({ image: 'team/app:v1.0.0', id: 'CVE-1', severity: 'CRITICAL' }),
-      finding({ image: 'team/app:v1.0.0', id: 'CVE-2', severity: 'HIGH' }),
+      finding({ image: APP, id: 'CVE-1', severity: 'CRITICAL' }),
+      finding({ image: APP, id: 'CVE-2', severity: 'HIGH' }),
+      // critical, no fix yet: not actionable, counted for awareness
+      finding({ image: APP, id: 'CVE-3', severity: 'CRITICAL', fixed: '' }),
+      // actively exploited (KEV) with a fix, at MEDIUM: counts as KEV-fixable
+      finding({ image: APP, id: 'CVE-4', severity: 'MEDIUM', kev: true }),
+      // actively exploited but no fix: not KEV-fixable
+      finding({
+        image: APP,
+        id: 'CVE-5',
+        severity: 'HIGH',
+        kev: true,
+        fixed: '',
+      }),
+      finding({ image: 'team/old:v1', id: 'CVE-9', severity: 'CRITICAL' }),
     ],
   });
+  const APP_TOTALS = {
+    critical: 1,
+    high: 1,
+    actionable: 2,
+    criticalNoFix: 1,
+    kevFixable: 1,
+  };
 
-  it('matches a running image on repo path despite a different tag', () => {
-    const s = summarizeForImages(reduced, ['team/app:v9.9.9']);
-    expect(s.matchedRefs).toEqual(['team/app:v9.9.9']);
+  it('matches the exact scanned ref and counts every card', () => {
+    const s = summarizeForImages(reduced, [APP]);
+    expect(s.matchedRefs).toEqual([APP]);
     expect(s.unmatchedRefs).toEqual([]);
-    expect(s.totals).toEqual({ critical: 1, high: 1, actionable: 2 });
+    expect(s.totals).toEqual(APP_TOTALS);
   });
 
-  it('separates a scanned-but-clean repo from an unscanned one', () => {
-    const s = summarizeForImages(reduced, ['team/clean:v2', 'team/never:v1']);
-    expect(s.matchedRefs).toEqual(['team/clean:v2']);
+  it('matches on digest when the running ref is written differently', () => {
+    for (const ref of ['team/app@sha256:aaa', 'team/app:latest@sha256:aaa']) {
+      const s = summarizeForImages(reduced, [ref]);
+      expect(s.matchedRefs).toEqual([ref]);
+      expect(s.totals).toEqual(APP_TOTALS);
+    }
+  });
+
+  it('does not borrow findings from another version of the same repo', () => {
+    // The weekly scan saw team/old:v1; the cluster now runs v2. Reporting
+    // v1's CVE-9 against v2 is the bug this guards (hk-demo v0.5.0 vs v0.7.0).
+    const s = summarizeForImages(reduced, ['team/old:v2']);
+    expect(s.matchedRefs).toEqual([]);
+    expect(s.unmatchedRefs).toEqual(['team/old:v2']);
+    expect(s.totals.critical).toBe(0);
+  });
+
+  it('does not match a different digest of the same tag', () => {
+    const s = summarizeForImages(reduced, ['team/app:v1.0.0@sha256:bbb']);
+    expect(s.unmatchedRefs).toEqual(['team/app:v1.0.0@sha256:bbb']);
+  });
+
+  it('separates a scanned-but-clean image from an unscanned one', () => {
+    const s = summarizeForImages(reduced, [
+      'team/clean:v2.0.0',
+      'team/never:v1',
+    ]);
+    expect(s.matchedRefs).toEqual(['team/clean:v2.0.0']);
     expect(s.unmatchedRefs).toEqual(['team/never:v1']);
     expect(s.totals.actionable).toBe(0);
   });
 
   it('dedupes identical refs from multiple pods', () => {
-    const s = summarizeForImages(reduced, [
-      'team/app:v1.0.0',
-      'team/app:v1.0.0',
-    ]);
-    expect(s.matchedRefs).toEqual(['team/app:v1.0.0']);
-    expect(s.totals.actionable).toBe(2);
+    const s = summarizeForImages(reduced, [APP, APP]);
+    expect(s.matchedRefs).toEqual([APP]);
+    expect(s.totals).toEqual(APP_TOTALS);
+  });
+
+  it('counts a CVE shared by two images of one component once', () => {
+    const two = reduceReport({
+      scanned: ['team/a:v1', 'team/b:v1'],
+      failed: [],
+      findings: [
+        finding({ image: 'team/a:v1', id: 'CVE-7', fixed: '' }),
+        finding({ image: 'team/b:v1', id: 'CVE-7', fixed: '' }),
+        finding({ image: 'team/a:v1', id: 'CVE-8', kev: true }),
+        finding({ image: 'team/b:v1', id: 'CVE-8', kev: true }),
+      ],
+    });
+    const s = summarizeForImages(two, ['team/a:v1', 'team/b:v1']);
+    expect(s.totals.criticalNoFix).toBe(1);
+    expect(s.totals.kevFixable).toBe(1);
   });
 });
 

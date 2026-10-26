@@ -47,6 +47,8 @@ export class ReportStore {
   /** Undefined until the first listing; drives the same TTL as `latest`. */
   private datesFetchedAt?: number;
   private datesCache: string[] = [];
+  /** The in-flight latest.json fetch that concurrent callers share. */
+  private pendingLatest?: Promise<{ date: string; reduced: ReducedReport }>;
 
   constructor(
     private readonly source: ReportSource,
@@ -87,11 +89,29 @@ export class ReportStore {
     return this.datesCache;
   }
 
+  /**
+   * Concurrent callers on a cold or expired cache share one fetch. The
+   * scorecard calculates up to 50 entities at once; without this each would
+   * download and parse the ~10 MB report itself (the shape of the v1.6.0
+   * filecheck stall). A failed fetch is not cached: the next call retries.
+   */
   async getLatest(): Promise<{ date: string; reduced: ReducedReport }> {
     const cached = this.latest;
     if (cached && this.now() - cached.fetchedAt < this.cfg.cacheTtlMs) {
       return { date: cached.date, reduced: cached.reduced };
     }
+    if (!this.pendingLatest) {
+      this.pendingLatest = this.refreshLatest().finally(() => {
+        this.pendingLatest = undefined;
+      });
+    }
+    return this.pendingLatest;
+  }
+
+  private async refreshLatest(): Promise<{
+    date: string;
+    reduced: ReducedReport;
+  }> {
     const raw = await this.fetchReport(`${this.cfg.prefix}latest.json`);
     // latest.json carries no date of its own; the newest dated key names it.
     const [newest] = await this.listDates();

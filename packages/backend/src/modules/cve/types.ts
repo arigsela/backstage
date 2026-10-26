@@ -15,6 +15,26 @@ export interface RawFinding {
   fixed?: string;
   severity: string;
   title: string;
+  /** On CISA's Known Exploited Vulnerabilities list (the scan's KEV enrichment). */
+  kev?: boolean | null;
+  /** EPSS exploit-probability score; null when the feed had none. */
+  epss?: number | null;
+}
+
+/** Enough of a finding to count it once across a component's images. */
+export interface CountedFinding {
+  id: string;
+  pkg: string;
+  installed: string;
+}
+
+/** What one scanned image carries, keyed by its exact ref. */
+export interface ImageFindings {
+  actionable: ActionableFinding[];
+  /** CRITICAL with no fixed version upstream yet. */
+  criticalNoFix: CountedFinding[];
+  /** On the KEV list with a fix, at any severity. */
+  kevFixable: CountedFinding[];
 }
 
 /** The on-disk report schema. */
@@ -44,8 +64,17 @@ export interface ActionableFinding {
  * scanned. Those two must never be conflated.
  */
 export interface ReducedReport {
+  /** Repo-level coverage and findings: the trend only, which spans releases. */
   scannedRepos: Set<string>;
   byRepo: Map<string, ActionableFinding[]>;
+  /**
+   * Exact scanned ref → its findings. Current answers match on this (or on
+   * refByDigest), never on the repo: a newer tag of a scanned repo is not
+   * scanned until the next weekly run.
+   */
+  images: Map<string, ImageFindings>;
+  /** `sha256:…` digest → the scanned ref that carried it. */
+  refByDigest: Map<string, string>;
 }
 
 /** One dated report reduced to what trend needs: coverage plus counts. */
@@ -59,6 +88,14 @@ export interface HistoryPoint {
 export interface ComponentReport {
   matchedRefs: string[];
   unmatchedRefs: string[];
-  totals: { critical: number; high: number; actionable: number };
+  totals: {
+    critical: number;
+    high: number;
+    actionable: number;
+    /** CRITICAL with no fix yet (awareness; not in `findings`). */
+    criticalNoFix: number;
+    /** On the KEV list with a fix, at any severity. */
+    kevFixable: number;
+  };
   findings: ActionableFinding[];
 }
