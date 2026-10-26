@@ -72,6 +72,10 @@ import { isKagentAgent, KagentAboutCardContent } from './KagentAgentCard';
 // useCveReport() internally and take no props — see packages/app/src/components/cve.
 import { CveFindingsTable, CveSummaryCard } from '../cve';
 
+// RHDH Scorecard: this app uses the legacy createApp frontend, whose
+// components the scorecard package exports only from its /legacy entry point.
+import { EntityScorecardContent } from '@red-hat-developer-hub/backstage-plugin-scorecard/legacy';
+
 const techdocsContent = (
   <EntityTechdocsContent>
     <TechDocsAddons>
@@ -200,6 +204,17 @@ const securityRoute = (
   </EntityLayout.Route>
 );
 
+// Scorecard tab: the entity's latest scorecard metrics (open PRs, Dependabot
+// alerts, runbook/docs file checks) with their threshold status. Shared by the
+// service, website and default layouts; not on kagent agent pages, which have
+// no GitHub slug or source folder to score. Entities without any metric show
+// the plugin's empty state.
+const scorecardRoute = (
+  <EntityLayout.Route path="/scorecard" title="Scorecard">
+    <EntityScorecardContent />
+  </EntityLayout.Route>
+);
+
 // kagent: dedicated 4-tab layout (Overview / Kubernetes / Security / Docs) for
 // entities with spec.type='kagent-agent'. Since kagent 1.0 the entity is
 // ingested from the api.kagent.dev Agent itself and there is no per-agent
@@ -249,6 +264,8 @@ const serviceEntityPage = (
     </EntityLayout.Route>
 
     {securityRoute}
+
+    {scorecardRoute}
 
     <EntityLayout.Route
       path="/crossplane"
@@ -317,6 +334,8 @@ const websiteEntityPage = (
 
     {securityRoute}
 
+    {scorecardRoute}
+
     <EntityLayout.Route path="/dependencies" title="Dependencies">
       <Grid container spacing={3} alignItems="stretch">
         <Grid item md={6}>
@@ -358,6 +377,8 @@ const defaultEntityPage = (
       scanned image.
     */}
     {securityRoute}
+
+    {scorecardRoute}
 
     <EntityLayout.Route path="/docs" title="Docs">
       {techdocsContent}

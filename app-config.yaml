@@ -37,9 +37,12 @@ backend:
   # the plugins listed here. Without 'catalog', the catalog's registered actions
   # (get-catalog-entity, query-catalog-entities) are dropped and the MCP catalog
   # server exposes 0 tools. Required for the homelab-knowledge agent's MCP tool.
+  # 'scorecard' adds scorecard:get-entity-metrics and scorecard:list-metrics,
+  # served by the `readiness` MCP server below.
   actions:
     pluginSources:
       - catalog
+      - scorecard
 
   # SERVICE-TO-SERVICE AUTH:
   # Backstage v1.x's new backend system requires backend plugins to authenticate
@@ -336,7 +339,9 @@ mcpActions:
   # Do NOT prefix tool names with the plugin id. Default names like
   # "catalog.get-catalog-entity" contain a dot, which violates Anthropic's tool
   # name pattern ^[a-zA-Z0-9_-]{1,128}$ and 400s the agent. Undotted names
-  # (e.g. "get-catalog-entity") are valid. Safe here — only catalog is exposed.
+  # (e.g. "get-catalog-entity") are valid. Safe here: the catalog and scorecard
+  # action names do not collide (get-/query-catalog-*, get-entity-metrics,
+  # list-metrics).
   namespacedToolNames: false
   servers:
     catalog:
@@ -350,6 +355,38 @@ mcpActions:
           - id: 'catalog:register-entity'
           - id: 'catalog:unregister-entity'
           - id: 'catalog:validate-entity'
+    # /api/mcp-actions/v1/readiness: read-only scorecard metrics plus the two
+    # catalog reads an agent needs to find an entity, for production-readiness
+    # reviews (arigsela/claude-agents skills/readiness reads the same data over
+    # REST). Every action here is read-only.
+    readiness:
+      name: readiness
+      filter:
+        include:
+          - id: 'scorecard:*'
+          - id: 'catalog:get-catalog-entity'
+          - id: 'catalog:query-catalog-entities'
+
+# --- SCORECARD (Red Hat Developer Hub) ---
+# Per-entity metrics with success/warning/error thresholds (provider defaults).
+# The GitHub and Dependabot providers run hourly (API calls). filecheck runs
+# daily: it reads the folder named by each entity's backstage.io/source-location
+# (base-apps/<app>/ in arigsela/kubernetes for most apps), and the GitHub reader
+# downloads that repo's whole archive (~105 MB) once per entity per run.
+# Do not repoint source-location to make filecheck read an app repo: TechDocs
+# resolves `backstage.io/techdocs-ref: dir:.` against the same annotation.
+scorecard:
+  metricProviders:
+    filecheck:
+      fileExistence:
+        options:
+          files:
+            runbook: runbook.md
+            docs: docs.md
+        schedule:
+          frequency: { cron: '0 6 * * *' }
+          timeout: { minutes: 15 }
+          initialDelay: { minutes: 5 }
 
 # --- KUBERNETES ---
 # The Kubernetes plugin shows pod/deployment status directly on entity pages.
