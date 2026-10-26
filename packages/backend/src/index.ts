@@ -221,8 +221,52 @@ backend.add(import('@backstage/plugin-catalog-backend-module-logs'));
 
 // MCP Actions backend — exposes registered actions as MCP tools. Configured
 // (app-config mcpActions) to serve a read-only /api/mcp-actions/v1/catalog for
-// the homelab-knowledge kagent agent. See app-config catalog server config.
+// the homelab-knowledge kagent agent, and /api/mcp-actions/v1/readiness
+// (scorecard + catalog reads) for production-readiness reviews.
 backend.add(import('@backstage/plugin-mcp-actions-backend'));
+
+/**
+ * SCORECARD (Red Hat Developer Hub)
+ * Collects per-entity metrics on a schedule and stores the latest values in
+ * its own database (backstage_plugin_scorecard). Serves them at
+ * GET /api/scorecard/metrics/catalog/:kind/:namespace/:name and registers the
+ * read-only actions scorecard:get-entity-metrics and scorecard:list-metrics
+ * (exposed by the `readiness` MCP server; see app-config mcpActions).
+ *
+ * Pinned at 4.2.0 (modules 1.0.2): the last release whose core dependencies
+ * fit this portal's Backstage 1.52 lockfile. 4.5.x needs backend-defaults
+ * ^0.17.8, i.e. a Backstage upgrade first.
+ *
+ * Metric providers:
+ * - module-github: github.openPRs, from github.com/project-slug
+ * - module-dependabot: open Dependabot alerts by severity; entities opt in with
+ *   github.com/dependabot: 'true' and the repo needs Dependabot alerts enabled
+ * - module-filecheck: whether runbook.md / docs.md exist in the folder the
+ *   entity's backstage.io/source-location names (base-apps/<app>/ for apps whose
+ *   catalog-info lives in arigsela/kubernetes). Runs daily, not hourly: each run
+ *   downloads the source repo archive once per entity.
+ *
+ * Config: `scorecard:` in app-config.yaml.
+ * See: https://github.com/redhat-developer/rhdh-plugins/tree/main/workspaces/scorecard
+ */
+backend.add(
+  import('@red-hat-developer-hub/backstage-plugin-scorecard-backend'),
+);
+backend.add(
+  import(
+    '@red-hat-developer-hub/backstage-plugin-scorecard-backend-module-github'
+  ),
+);
+backend.add(
+  import(
+    '@red-hat-developer-hub/backstage-plugin-scorecard-backend-module-dependabot'
+  ),
+);
+backend.add(
+  import(
+    '@red-hat-developer-hub/backstage-plugin-scorecard-backend-module-filecheck'
+  ),
+);
 
 /**
  * GITHUB CATALOG DISCOVERY (Phase 4)

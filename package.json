@@ -42,7 +42,11 @@
   },
   "resolutions": {
     "@types/react": "^18",
-    "@types/react-dom": "^18"
+    "@types/react-dom": "^18",
+    "@red-hat-developer-hub/backstage-plugin-scorecard-node": "4.2.0",
+    "@red-hat-developer-hub/backstage-plugin-scorecard-common": "4.2.0",
+    "@backstage/plugin-home@^0.9.7": "0.9.9",
+    "@backstage/plugin-home-react@^0.1.39": "0.1.41"
   },
   "prettier": "@backstage/cli/config/prettier",
   "lint-staged": {

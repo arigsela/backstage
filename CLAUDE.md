@@ -51,6 +51,7 @@ default branch is `main` and `origin/master` does not exist, so it exits with
 bash scripts/kagent-template/test-contract.sh     # Layer 1: offline template render + assert
 BACKSTAGE_URL=http://localhost:7007 EXPECTED_AGENTS=7 bash scripts/check-agent-contract.sh   # Layer 3: agents ingested from kagent 1.0 Agents
 BACKSTAGE_URL=http://localhost:7007 bash scripts/check-cve-contract.sh    # Layer 3: CVE reports
+BACKSTAGE_URL=http://localhost:7007 [ENTITY_REF=component:hk-demo/hk-demo] bash scripts/check-scorecard-contract.sh   # Layer 3: scorecard + readiness MCP server
 ```
 
 **Build & deploy** — `./scripts/build-and-push.sh [--version vX.Y.Z] [--platform linux/amd64]`
@@ -167,11 +168,31 @@ contract harness cannot run as-is against this checkout.
 
 ### MCP actions
 
-`@backstage/plugin-mcp-actions-backend` exposes a single read-only `catalog` server
-at `/api/mcp-actions/v1/catalog`, consumed by the `homelab-knowledge` kagent agent.
-Config gotcha: `namespacedToolNames: false` is deliberate — default names like
+`@backstage/plugin-mcp-actions-backend` exposes two read-only servers: `catalog` at
+`/api/mcp-actions/v1/catalog`, consumed by the `homelab-knowledge` kagent agent, and
+`readiness` at `/api/mcp-actions/v1/readiness` (the scorecard's `get-entity-metrics` /
+`list-metrics` plus `get-catalog-entity` / `query-catalog-entities`). Config gotcha:
+`namespacedToolNames: false` is deliberate — default names like
 `catalog.get-catalog-entity` contain a dot, which violates Anthropic's tool-name
 pattern and 400s the agent.
+
+### Scorecard (RHDH)
+
+`@red-hat-developer-hub/backstage-plugin-scorecard*` at **4.2.0** (modules 1.0.2), pinned
+exactly, plus root `resolutions` for `-scorecard-node`/`-scorecard-common` and for the
+scorecard frontend's `@backstage/plugin-home`/`plugin-home-react` ranges. Without them
+yarn takes newer releases that need Backstage 1.54+ and pull ~20 new `@backstage/*`
+versions; check `git diff origin/main -- yarn.lock | grep '^+"@backstage/'` prints
+nothing after any scorecard change. Metrics: `github.openPRs` (from
+`github.com/project-slug`), `dependabot.alerts*` (entities opt in with
+`github.com/dependabot: 'true'`, and the repo needs Dependabot alerts on), and
+`filecheck.runbook`/`filecheck.docs`. filecheck reads the folder named by
+`backstage.io/source-location` (`base-apps/<app>/` for apps catalogued from the
+kubernetes repo) and downloads that repo's archive once per entity per run, so it runs
+daily at 06:00, not hourly. Do not repoint `source-location` to make it read an app
+repo: TechDocs resolves `techdocs-ref: dir:.` against the same annotation. The entity
+page tab uses `EntityScorecardContent` from the package's `/legacy` entry (this app is
+on the legacy `createApp`).
 
 ### Config layering
 
