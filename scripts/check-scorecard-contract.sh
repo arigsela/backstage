@@ -4,13 +4,14 @@
 #
 # Asserts what the production readiness skill (arigsela/claude-agents,
 # skills/readiness) and kagent rely on:
-#   1. the scorecard backend is installed and registers the expected metrics;
+#   1. the scorecard backend is installed and registers the expected metrics,
+#      and no filecheck.* metric (that module stalled the backend; removed);
 #   2. the `readiness` MCP server lists exactly the scorecard + catalog read tools;
 #   3. the existing `catalog` MCP server (kagent's backstage-catalog
 #      RemoteMCPServer) still lists exactly its three tools;
-#   4. with ENTITY_REF set, that entity has values for the GitHub and file-check
-#      metrics. Dependabot metrics are printed, not asserted: they depend on the
-#      repo's Dependabot alerts setting.
+#   4. with ENTITY_REF set, that entity has a value for github.openPRs (collected
+#      hourly, first run 1 minute after startup). Dependabot metrics are printed,
+#      not asserted: they depend on the repo's Dependabot alerts setting.
 #
 # Usage:
 #   BACKSTAGE_URL=http://localhost:7007 bash scripts/check-scorecard-contract.sh
@@ -78,14 +79,24 @@ import json, sys
 doc = json.load(open(sys.argv[1]))
 items = doc.get("metrics", doc) if isinstance(doc, dict) else doc
 ids = {m["id"] for m in items}
-want = ["github.openPRs", "filecheck.runbook", "filecheck.docs"]
+want = ["github.openPRs"]
 gaps = [w for w in want if w not in ids]
 if not any(i.startswith("dependabot.") for i in ids):
     gaps.append("dependabot.*")
 print(" ".join(gaps))
 ' "${TMP}/metrics.json")
 [ -z "${missing}" ] || fail "metrics not registered: ${missing}"
-pass "github.openPRs, filecheck.runbook, filecheck.docs and dependabot.* registered"
+pass "github.openPRs and dependabot.* registered"
+# filecheck was removed in v1.6.1: each run downloaded the kubernetes repo archive
+# once per entity and stalled the backend until the liveness probe killed it.
+banned=$(python3 -I -c '
+import json, sys
+doc = json.load(open(sys.argv[1]))
+items = doc.get("metrics", doc) if isinstance(doc, dict) else doc
+print(" ".join(sorted(m["id"] for m in items if m["id"].startswith("filecheck."))))
+' "${TMP}/metrics.json")
+[ -z "${banned}" ] || fail "filecheck metrics registered (the module stalls the backend): ${banned}"
+pass "no filecheck.* metrics"
 
 echo "== 2. readiness MCP server lists the scorecard and catalog read tools =="
 want_readiness=$'get-catalog-entity\nget-entity-metrics\nlist-metrics\nquery-catalog-entities'
@@ -116,7 +127,7 @@ print(f"/api/scorecard/metrics/catalog/{kind.lower()}/{ns}/{name}")
 import json, sys
 results = {m["id"]: m for m in json.load(open(sys.argv[1]))}
 bad = []
-for want in ("github.openPRs", "filecheck.runbook", "filecheck.docs"):
+for want in ("github.openPRs",):
     m = results.get(want) or {}
     result = m.get("result") or {}
     value = result.get("value")

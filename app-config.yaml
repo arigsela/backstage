@@ -369,24 +369,10 @@ mcpActions:
 
 # --- SCORECARD (Red Hat Developer Hub) ---
 # Per-entity metrics with success/warning/error thresholds (provider defaults).
-# The GitHub and Dependabot providers run hourly (API calls). filecheck runs
-# daily: it reads the folder named by each entity's backstage.io/source-location
-# (base-apps/<app>/ in arigsela/kubernetes for most apps), and the GitHub reader
-# downloads that repo's whole archive (~105 MB) once per entity per run.
-# Do not repoint source-location to make filecheck read an app repo: TechDocs
-# resolves `backstage.io/techdocs-ref: dir:.` against the same annotation.
-scorecard:
-  metricProviders:
-    filecheck:
-      fileExistence:
-        options:
-          files:
-            runbook: runbook.md
-            docs: docs.md
-        schedule:
-          frequency: { cron: '0 6 * * *' }
-          timeout: { minutes: 15 }
-          initialDelay: { minutes: 5 }
+# The GitHub and Dependabot providers run hourly (API calls) with their default
+# schedules, so there is no `scorecard:` block. The filecheck provider is not
+# installed: it downloads the ~105 MB kubernetes repo archive once per entity and
+# stalled the backend in v1.6.0 (see packages/backend/src/index.ts).
 
 # --- KUBERNETES ---
 # The Kubernetes plugin shows pod/deployment status directly on entity pages.
